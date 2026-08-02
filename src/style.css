@@ -1,5 +1,5 @@
 /* ============================================================
-   style.css — FPS Game Tahap 20 (Bot AI + UI Fix v8)
+   style.css — FPS Game Tahap 23 (Team System & Scoreboard v10)
    ============================================================ */
 
 /* Reset & fullscreen */
@@ -897,6 +897,7 @@ canvas {
   justify-content: center;
   background: rgba(100, 0, 0, 0.7);
   backdrop-filter: blur(2px);
+  pointer-events: none;  /* v10: Allow clicks to pass through to canvas for re-locking */
 }
 
 .death-content {
@@ -923,4 +924,218 @@ canvas {
 @keyframes deathPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* ── Tahap 23: Main Menu (testing) ────────────────────────── */
+#main-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.menu-container {
+  text-align: center;
+  padding: 40px 50px;
+  background: rgba(15, 15, 30, 0.95);
+  border: 2px solid #00ff88;
+  border-radius: 16px;
+  max-width: 480px;
+  width: 90%;
+  color: #ccccdd;
+  font-family: 'Courier New', monospace;
+}
+
+.menu-title {
+  font-size: 32px;
+  color: #00ff88;
+  letter-spacing: 6px;
+  margin-bottom: 8px;
+  text-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+  animation: menuPulse 2s ease-in-out infinite;
+}
+
+.menu-subtitle {
+  font-size: 13px;
+  color: #888899;
+  letter-spacing: 2px;
+  margin-bottom: 24px;
+}
+
+@keyframes menuPulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 20px rgba(0, 255, 136, 0.4); }
+  50% { opacity: 0.85; text-shadow: 0 0 10px rgba(0, 255, 136, 0.2); }
+}
+
+.menu-options {
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: #aaaacc;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.menu-option label {
+  min-width: 100px;
+  color: #888899;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.menu-option select {
+  background: rgba(30, 30, 60, 0.8);
+  border: 1px solid rgba(100, 150, 255, 0.3);
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.menu-option select:focus {
+  outline: none;
+  border-color: #00ff88;
+}
+
+.menu-team-label {
+  font-weight: bold;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.menu-ff-status {
+  color: #ff4444;
+  font-weight: bold;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.menu-start-btn {
+  display: inline-block;
+  padding: 14px 40px;
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 3px;
+  color: #111111;
+  background: #00ff88;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.menu-start-btn:hover {
+  background: #44ffaa;
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+}
+
+.menu-start-btn:active {
+  transform: scale(0.98);
+}
+
+/* ── Tahap 23: Scoreboard (top-center) ────────────────────── */
+#scoreboard {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 22;
+  pointer-events: none;
+  text-align: center;
+  padding: 6px 20px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  min-width: 180px;
+}
+
+.sb-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sb-header {
+  margin-bottom: 2px;
+}
+
+.sb-team-name {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.sb-score {
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+  min-width: 28px;
+}
+
+.sb-separator {
+  font-size: 18px;
+  color: #666666;
+  font-weight: bold;
+}
+
+.sb-details {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #888888;
+}
+
+.sb-detail-sep {
+  color: #444444;
+}
+
+/* ── Tahap 23: Kill Feed (top-right, below map-info) ──────── */
+#kill-feed {
+  position: fixed;
+  top: 42px;
+  right: 10px;
+  z-index: 22;
+  pointer-events: none;
+  text-align: right;
+  max-width: 280px;
+}
+
+.kf-entry {
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  padding: 2px 8px;
+  margin-bottom: 2px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+  transition: opacity 0.3s ease;
+  white-space: nowrap;
+}
+
+.kf-weapon {
+  color: #ffcc44;
+  font-size: 10px;
 }

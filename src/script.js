@@ -1,6 +1,6 @@
 /* ============================================================
-   script.js — FPS Game Tahap 21: Bot AI — Shooting & Targeting
-   + Tahap 01-20 + Bug fixes v9 (melee hit, pathfinding, LOS)
+   script.js — FPS Game Tahap 23: Team System & Scoreboard
+   + Tahap 01-22 + Bug fixes v10 (crouch pose, fullscreen death)
    ============================================================ */
 
 // ── Konfigurasi ──────────────────────────────────────────────
@@ -496,10 +496,9 @@ function setupInputHandlers() {
       isSniperScoping = false;
       targetFOV = CONFIG.cameraFOV;
       // Tahap 18: Don't show lock prompt if inventory is open
-      if (!isInventoryOpen && lockPrompt) lockPrompt.style.display = 'flex';
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
+      if (!isInventoryOpen && !isPlayerDead && lockPrompt) lockPrompt.style.display = 'flex';
+      // v10: Don't exit fullscreen when pointer lock is lost due to death
+      // Only exit fullscreen if player intentionally pressed Escape (not death)
     }
   });
 
@@ -741,6 +740,9 @@ function init() {
 
   // Tahap 20: Initialize bots (after arena is built)
   initBots();
+
+  // Tahap 23: Initialize scoreboard
+  updateScoreboard();
 
   // Start Render Loop
   animate();
@@ -5496,10 +5498,12 @@ function playerDeath() {
     deathScreen.style.display = 'flex';
   }
 
-  // Release pointer lock
-  if (document.pointerLockElement) {
-    document.exitPointerLock();
-  }
+  // v10: Do NOT release pointer lock or exit fullscreen on death
+  // Player should stay in fullscreen regardless of death/alive state
+  // The death screen overlay is shown on top of the game
+
+  // Tahap 23: Record player death for team scoring
+  recordPlayerDeath(lastDamageSource);
 
   console.log('PLAYER DIED — Respawning in ' + DEATH_RESPAWN_TIME + 's');
 }
@@ -5545,6 +5549,11 @@ function respawnPlayer() {
   // Re-lock pointer
   if (renderer && renderer.domElement) {
     renderer.domElement.requestPointerLock();
+  }
+
+  // v10: Ensure fullscreen is maintained after respawn
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
   }
 
   console.log('PLAYER RESPAWNED');
@@ -6500,12 +6509,25 @@ function updateBots(deltaTime) {
       bot.state = 'patrol';
     }
 
-    // ── Tahap 22: Crouching ──
+    // ── Tahap 22/23: Crouching (proper squat pose) ──
     bot.isCrouching = (bot.state === 'crouch_shoot' || bot.state === 'take_cover');
     if (bot.isCrouching && bot.isGrounded) {
-      bot.mesh.scale.y = 0.6; // Visually crouch
+      // v10: Proper squat pose — bend legs and lower body instead of just scaling
+      const body = bot.mesh.getObjectByName('bot_body');
+      const head = bot.mesh.getObjectByName('bot_head');
+      const leftEye = bot.mesh.children.find(c => c.name !== 'bot_body' && c.name !== 'bot_head' && c.name !== 'bot_left_arm' && c.name !== 'bot_right_arm' && c.name !== 'bot_left_leg' && c.name !== 'bot_right_leg' && c.position && c.geometry && c.geometry.parameters && c.geometry.parameters.width === 0.06 && c.geometry.parameters.height === 0.06);
+      if (body) body.position.y = BOT_CONFIG.legHeight * 0.5 + BOT_CONFIG.bodyHeight / 2; // Lower body to squat
+      if (head) head.position.y = BOT_CONFIG.legHeight * 0.5 + BOT_CONFIG.bodyHeight + BOT_CONFIG.headSize / 2; // Lower head
+      // Bend legs outward (knee bend) for squat look
+      if (bot.mesh.userData.leftLegPivot) bot.mesh.userData.leftLegPivot.rotation.x = -0.8;
+      if (bot.mesh.userData.rightLegPivot) bot.mesh.userData.rightLegPivot.rotation.x = -0.8;
     } else {
-      bot.mesh.scale.y = 1.0;
+      // Reset to standing pose
+      const body = bot.mesh.getObjectByName('bot_body');
+      const head = bot.mesh.getObjectByName('bot_head');
+      if (body) body.position.y = BOT_CONFIG.legHeight + BOT_CONFIG.bodyHeight / 2;
+      if (head) head.position.y = BOT_CONFIG.legHeight + BOT_CONFIG.bodyHeight + BOT_CONFIG.headSize / 2;
+      // Don't reset leg rotation here — the animation code handles it
     }
 
     // ── Gravity & Jump Physics ──
@@ -6994,7 +7016,7 @@ function updateBotBulletTrails() {
 }
 
 // ── Bot Death & Respawn ──────────────────────────────────────
-function damageBot(bot, damage) {
+function damageBot(bot, damage, weaponSource) {
   if (bot.isDead) return;
 
   bot.hp -= damage;
@@ -7015,6 +7037,10 @@ function damageBot(bot, damage) {
     // Hide the bot mesh (make it fall down)
     bot.mesh.rotation.x = Math.PI / 2;
     bot.mesh.position.y = 0.3;
+
+    // Tahap 23: Record bot kill for team scoring — use player's weapon
+    const playerWeapon = weaponSource || weaponInventory.slots[weaponInventory.currentSlot] || 'fist';
+    recordBotKill(bot, playerWeapon);
 
     console.log('Bot ' + bot.index + ' killed!');
   }
@@ -7778,6 +7804,7 @@ function animate() {
   updateSmokeOverlay();      // Tahap 11 fix: screen-space smoke overlay
   updateDeathAndRespawn(deltaTime); // Tahap 19: Death/respawn timer
   updateCrosshair();
+  updateKillFeed();             // Tahap 23: Kill feed update
   updateDebugInfo(deltaTime);
 
   renderer.render(scene, camera);
@@ -7860,8 +7887,11 @@ function updateDebugInfo(deltaTime) {
   const shootingBots = activeBots.filter(b => b.state === 'shoot' && b.hasLineOfSight).length;
   const botInfo = ' | Bots: ' + aliveBots + '/' + activeBots.length + ' Shooting: ' + shootingBots;
 
+  // Tahap 23: Team score
+  const teamInfo = ' | BLUE: ' + teamScores.teamA.kills + 'K RED: ' + teamScores.teamB.kills + 'K';
+
   debugInfo.innerHTML =
-    'TAHAP 21 — Bot Shooting & Targeting' + armorInfo + hpInfo + botInfo + '<br>' +
+    'TAHAP 23 — Team System & Score' + armorInfo + hpInfo + botInfo + teamInfo + '<br>' +
     'FPS: ' + fps + ' | Speed: ' + speed + ' u/s [' + speedLabel + ']<br>' +
     'Pos: (' + camera.position.x.toFixed(1) + ', ' + camera.position.y.toFixed(1) + ', ' + camera.position.z.toFixed(1) + ')<br>' +
     'Yaw: ' + yawDeg + ' | Pitch: ' + pitchDeg + '<br>' +
@@ -7873,9 +7903,190 @@ function updateDebugInfo(deltaTime) {
     'Test: F5=20dmg | F6=Headshot(40dmg) | F7=Kill(100dmg) | Bots: ' + activeBots.length + ' alive';
 }
 
+// ══════════════════════════════════════════════════════════════
+//  TAHAP 23: TEAM SYSTEM — Team Assignment & Score
+// ══════════════════════════════════════════════════════════════
+
+// ── Team Configuration ─────────────────────────────────────────
+const TEAM_CONFIG = {
+  teamA: { name: 'BLUE', color: 0x3366ff, cssColor: '#4488ff' },  // Player team
+  teamB: { name: 'RED', color: 0xcc3333, cssColor: '#ff4444' },   // Bot team
+};
+
+// ── Team Score Tracking ────────────────────────────────────────
+const teamScores = {
+  teamA: { kills: 0, deaths: 0 },
+  teamB: { kills: 0, deaths: 0 },
+};
+
+// ── Player Team Assignment ─────────────────────────────────────
+const playerTeam = 'teamA';  // Player is always Team A (BLUE)
+
+// ── Kill Feed ──────────────────────────────────────────────────
+const killFeed = [];           // Array of { killer, victim, killerTeam, victimTeam, time }
+const KILL_FEED_MAX = 5;       // Max entries to show
+const KILL_FEED_DURATION = 5;  // Seconds before entry fades
+
+// ── Friendly Fire: OFF ─────────────────────────────────────────
+// Bots cannot damage each other (same team), player cannot damage bots on own team
+// Since player is teamA and bots are teamB, player-bot damage is always on
+// But if we add bot allies later, same-team damage is blocked
+const FRIENDLY_FIRE_ENABLED = false;
+
+function isFriendlyFire(sourceTeam, targetTeam) {
+  if (FRIENDLY_FIRE_ENABLED) return true;
+  return sourceTeam !== targetTeam;  // Only allow damage between different teams
+}
+
+// ── Update Scoreboard UI ───────────────────────────────────────
+function updateScoreboard() {
+  const sbEl = document.getElementById('scoreboard');
+  if (!sbEl) return;
+
+  const teamAKills = teamScores.teamA.kills;
+  const teamBKills = teamScores.teamB.kills;
+  const teamADeaths = teamScores.teamA.deaths;
+  const teamBDeaths = teamScores.teamB.deaths;
+
+  // Count alive bots
+  const aliveBots = activeBots.filter(b => !b.isDead).length;
+
+  sbEl.innerHTML =
+    '<div class="sb-row sb-header">' +
+      '<span class="sb-team-name" style="color:' + TEAM_CONFIG.teamA.cssColor + '">BLUE</span>' +
+      '<span class="sb-score">' + teamAKills + '</span>' +
+      '<span class="sb-separator">:</span>' +
+      '<span class="sb-score">' + teamBKills + '</span>' +
+      '<span class="sb-team-name" style="color:' + TEAM_CONFIG.teamB.cssColor + '">RED</span>' +
+    '</div>' +
+    '<div class="sb-details">' +
+      '<span style="color:' + TEAM_CONFIG.teamA.cssColor + '">D:' + teamADeaths + '</span>' +
+      '<span class="sb-detail-sep">|</span>' +
+      '<span style="color:' + TEAM_CONFIG.teamB.cssColor + '">D:' + teamBDeaths + '</span>' +
+    '</div>';
+}
+
+// ── Update Kill Feed UI ────────────────────────────────────────
+function updateKillFeed() {
+  const kfEl = document.getElementById('kill-feed');
+  if (!kfEl) return;
+
+  const now = performance.now() / 1000;
+
+  // Remove expired entries
+  while (killFeed.length > 0 && now - killFeed[0].time > KILL_FEED_DURATION) {
+    killFeed.shift();
+  }
+
+  // Limit to max entries
+  while (killFeed.length > KILL_FEED_MAX) {
+    killFeed.shift();
+  }
+
+  let html = '';
+  for (const entry of killFeed) {
+    const age = now - entry.time;
+    const opacity = Math.max(0, 1 - age / KILL_FEED_DURATION);
+    const killerColor = entry.killerTeam === 'teamA' ? TEAM_CONFIG.teamA.cssColor : TEAM_CONFIG.teamB.cssColor;
+    const victimColor = entry.victimTeam === 'teamA' ? TEAM_CONFIG.teamA.cssColor : TEAM_CONFIG.teamB.cssColor;
+    html += '<div class="kf-entry" style="opacity:' + opacity.toFixed(2) + '">' +
+      '<span style="color:' + killerColor + '">' + entry.killer + '</span>' +
+      ' <span class="kf-weapon">' + entry.weapon + '</span> ' +
+      '<span style="color:' + victimColor + '">' + entry.victim + '</span>' +
+    '</div>';
+  }
+
+  kfEl.innerHTML = html;
+}
+
+// ── Add Kill Feed Entry ────────────────────────────────────────
+function addKillFeedEntry(killer, victim, killerTeam, victimTeam, weapon) {
+  killFeed.push({
+    killer: killer,
+    victim: victim,
+    killerTeam: killerTeam,
+    victimTeam: victimTeam,
+    weapon: weapon || '?',
+    time: performance.now() / 1000,
+  });
+}
+
+// ── Record Bot Kill (player killed a bot) ──────────────────────
+function recordBotKill(bot, weapon) {
+  // Player (teamA) killed bot (teamB)
+  teamScores.teamA.kills++;
+  teamScores.teamB.deaths++;
+  const weaponName = weapon || 'glock';
+  const displayWeapon = weaponName.replace('bot_', '').replace('_', ' ');
+  addKillFeedEntry('Player', 'Bot ' + (bot.index + 1), 'teamA', 'teamB', displayWeapon);
+  updateScoreboard();
+}
+
+// ── Record Player Death (bot killed player) ────────────────────
+function recordPlayerDeath(weapon) {
+  // Bot (teamB) killed player (teamA)
+  teamScores.teamB.kills++;
+  teamScores.teamA.deaths++;
+  // Find the bot that most recently shot the player
+  let killerName = 'Bot';
+  let bestBot = null;
+  let bestTime = 0;
+  for (const bot of activeBots) {
+    if (!bot.isDead && bot.lastShootTime > bestTime) {
+      bestTime = bot.lastShootTime;
+      bestBot = bot;
+    }
+  }
+  if (bestBot) {
+    killerName = 'Bot ' + (bestBot.index + 1);
+  }
+  const weaponName = weapon || 'glock';
+  // Simplify weapon name for display
+  const displayWeapon = weaponName.replace('bot_', '').replace('_', ' ');
+  addKillFeedEntry(killerName, 'Player', 'teamB', 'teamA', displayWeapon);
+  updateScoreboard();
+}
+
+// ── Main Menu (testing) ────────────────────────────────────────
+let gameStarted = false;
+
+function setupMainMenu() {
+  const menuEl = document.getElementById('main-menu');
+  if (!menuEl) return;
+
+  const startBtn = document.getElementById('menu-start-btn');
+  const botCountSelect = document.getElementById('menu-bot-count');
+
+  if (startBtn) {
+    startBtn.addEventListener('click', () => {
+      // Get bot count from select
+      if (botCountSelect) {
+        BOT_CONFIG.count = parseInt(botCountSelect.value) || 3;
+      }
+
+      // Hide main menu
+      menuEl.style.display = 'none';
+
+      // Start the game
+      gameStarted = true;
+      init();
+    });
+  }
+
+  // Prevent pointer lock from main menu
+  menuEl.style.display = 'flex';
+}
+
+// ── Override init to not auto-start ─────────────────────────────
+const _originalInit = init;
+
+// ══════════════════════════════════════════════════════════════
+//  MODIFY EXISTING FUNCTIONS FOR TAHAP 23
+// ══════════════════════════════════════════════════════════════
+
 // ── Entry Point ─────────────────────────────────────────────
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', setupMainMenu);
 } else {
-  init();
+  setupMainMenu();
 }

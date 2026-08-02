@@ -3,10 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FPS Game 3D — Tahap 20</title>
+  <title>FPS Game 3D — Tahap 23</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- Tahap 23: Main Menu (testing) -->
+  <div id="main-menu">
+    <div class="menu-container">
+      <h1 class="menu-title">FPS GAME 3D</h1>
+      <p class="menu-subtitle">TAHAP 23 — Team System</p>
+      <div class="menu-options">
+        <div class="menu-option">
+          <label for="menu-bot-count">Jumlah Bot:</label>
+          <select id="menu-bot-count">
+            <option value="1">1 Bot</option>
+            <option value="2">2 Bots</option>
+            <option value="3" selected>3 Bots</option>
+            <option value="5">5 Bots</option>
+          </select>
+        </div>
+        <div class="menu-option">
+          <label>Team:</label>
+          <span class="menu-team-label" style="color:#4488ff">BLUE (Player)</span>
+          <span>vs</span>
+          <span class="menu-team-label" style="color:#ff4444">RED (Bots)</span>
+        </div>
+        <div class="menu-option">
+          <label>Friendly Fire:</label>
+          <span class="menu-ff-status">OFF</span>
+        </div>
+      </div>
+      <button id="menu-start-btn" class="menu-start-btn">MULAI BERMAIN</button>
+    </div>
+  </div>
 
   <!-- Loading Screen -->
   <div id="loading-screen">
@@ -34,6 +64,7 @@
         <span class="ctrl-key">H</span> Smoke (hold=aim) &nbsp;&nbsp;
         <span class="ctrl-key">B</span> Drop &nbsp;&nbsp;
         <span class="ctrl-key">I</span> Armor &nbsp;&nbsp;
+        <span class="ctrl-key">TAB</span> Scoreboard &nbsp;&nbsp;
         <span class="ctrl-key">F5</span> Test 20dmg &nbsp;&nbsp;
         <span class="ctrl-key">F6</span> Test Headshot &nbsp;&nbsp;
         <span class="ctrl-key">F7</span> Test Kill &nbsp;&nbsp;
@@ -44,6 +75,25 @@
 
   <!-- Debug Info Overlay -->
   <div id="debug-info"></div>
+
+  <!-- Tahap 23: Scoreboard (top-center) -->
+  <div id="scoreboard" class="scoreboard">
+    <div class="sb-row sb-header">
+      <span class="sb-team-name" style="color:#4488ff">BLUE</span>
+      <span class="sb-score">0</span>
+      <span class="sb-separator">:</span>
+      <span class="sb-score">0</span>
+      <span class="sb-team-name" style="color:#ff4444">RED</span>
+    </div>
+    <div class="sb-details">
+      <span style="color:#4488ff">D:0</span>
+      <span class="sb-detail-sep">|</span>
+      <span style="color:#ff4444">D:0</span>
+    </div>
+  </div>
+
+  <!-- Tahap 23: Kill Feed (top-right, below map-info) -->
+  <div id="kill-feed"></div>
 
   <!-- Jump Indicator -->
   <div id="jump-indicator" class="grounded">GROUNDED</div>
@@ -82,6 +132,7 @@
     <div class="ctrl-row"><span class="ctrl-key">6</span> Sniper (Q=switch, RMB=scope)</div>
     <div class="ctrl-row"><span class="ctrl-key">B</span> Drop senjata</div>
     <div class="ctrl-row"><span class="ctrl-key">I</span> Armor inventory (equip/unequip)</div>
+    <div class="ctrl-row"><span class="ctrl-key">TAB</span> Scoreboard</div>
     <div class="ctrl-row"><span class="ctrl-key">F5</span> Test damage (20)</div>
     <div class="ctrl-row"><span class="ctrl-key">F6</span> Test headshot (40)</div>
     <div class="ctrl-row"><span class="ctrl-key">F7</span> Test kill (100)</div>
@@ -107,7 +158,7 @@
   <!-- Tahap 09: Weapon HUD (bottom-right above controls) -->
   <div id="weapon-hud">
     <div id="weapon-name">Tangan Kosong</div>
-    <div id="weapon-ammo">∞</div>
+    <div id="weapon-ammo">&infin;</div>
     <div id="weapon-slot">[1/6]</div>
   </div>
 
