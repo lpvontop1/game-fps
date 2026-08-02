@@ -48,8 +48,10 @@ fps-game/
 | 4 | Shotgun (Pump/Auto) |
 | 5 | Sniper Rifle (Bolt/Semi-Auto) |
 | 6 | Rifle (Assault Rifle/SMG) |
-| G | Granat (Frag/Smoke) |
-| Q | Quick-switch ke senjata sebelumnya |
+| G | Granat Frag (hold=aim) |
+| H | Granat Smoke (hold=aim) |
+| Q | Cycle weapon variant (Pistol/Rifle/Shotgun/Sniper) |
+| B | Drop weapon |
 | R | Reload |
 | + / - | Sensitivitas mouse |
 | ESC | Lepas pointer lock |
@@ -74,7 +76,7 @@ fps-game/
 | 14 | Sistem Senjata — Pistol & Variannya | ✅ Selesai |
 | 15 | Sistem Senjata — Shotgun | ✅ Selesai |
 | 16 | Sistem Senjata — Sniper Rifle | ✅ Selesai |
-| 17 | Sistem Senjata — Switching & Inventory Pemain | 🔜 Berikutnya |
+| 17 | Sistem Senjata — Switching & Inventory Pemain | ✅ Selesai |
 | 18–36 | Armor, HP, Bot AI, Tim, Mode, UI, Polish | 🔜 Mendatang |
 
 ## Senjata Tersedia
@@ -89,6 +91,18 @@ fps-game/
 | 6 | Rifle | Assault Rifle / SMG | Magazine 30/35, rate tinggi |
 | G | Grenade | Frag Grenade / Smoke Grenade | Damage 80 / Asap 12 detik |
 
+## Fitur Tahap 17 — Weapon Switching & Inventory
+
+- **Weapon switch animation**: Brief lower + raise weapon animation (0.15s per phase)
+- **Drop weapon**: Tombol B = drop current weapon ke ground sebagai pickup item
+- **Pickup weapon**: Walk over dropped weapon untuk auto-pickup
+- **Quick-switch**: Tombol Q = cycle weapon variant (Pistol/Rifle/Shotgun/Sniper)
+- **SMG variant**: Slot 4 (Rifle) sekarang bisa switch antara Assault Rifle (M4/AR-15 style) dan SMG (MP5-style) via Q key
+- **SMG model**: Compact MP5-style dengan HK drum sights, curved magazine, vertical foregrip, retractable stock
+- **Assault Rifle model**: M4/AR-15 style dengan carry handle, collapsible stock, rail sections
+- **Inventory tracking**: Dropped weapons retain ammo state
+- **Pickup notification**: On-screen text saat mengambil weapon pickup
+
 ## Fitur Tahap 16 — Sniper Rifle
 
 - **Scope/Zoom**: Klik kanan hold = zoom (FOV 75 → 20), lerp transition smooth
@@ -97,7 +111,7 @@ fps-game/
 - **FOV transition**: Lerp dari 75 → 20 saat klik kanan, kembali saat release
 - **Weapon slot**: Tombol 5 = sniper
 
-## Fitur Lengkap (Tahap 01–16)
+## Fitur Lengkap (Tahap 01–17)
 
 ### Sistem Gerakan
 - **WASD movement**: Framerate-independent velocity dengan lerp

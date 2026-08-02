@@ -1,6 +1,6 @@
 /* ============================================================
-   script.js — FPS Game Tahap 16: Sistem Senjata — Sniper Rifle
-   + Tahap 01-15 + Bug fixes (realistic fist, smoke perf, knife blade edge)
+   script.js — FPS Game Tahap 17: Weapon Switching & Inventory
+   + Tahap 01-16 + Bug fixes (scope overlay, smoke perf, SMG skin)
    ============================================================ */
 
 // ── Konfigurasi ──────────────────────────────────────────────
@@ -85,8 +85,8 @@ const CONFIG = {
   grenadeMaxBounces: 3,
   grenadeTimer: 3.0,
   smokeGrenadeDuration: 12,
-  smokeParticleCount: 8,     // BUG FIX: reduced from 25 to prevent severe FPS drop inside smoke
-  smokeRadius: 5,            // BUG FIX: reduced from 10 (too large)
+  smokeParticleCount: 20,    // Optimized: 20 sprites for dense smoke, batch rendered
+  smokeRadius: 6,            // Slightly larger for better coverage
 
   // ── Tahap 12: Fist ──────────────────────────────────────
   fistRange: 2.0,            // BUG FIX: increased from 1.5 for easier aiming
@@ -130,6 +130,7 @@ const CONFIG = {
   },
   sniperRecoilRecovery: 4.0,
   sniperSwitchCycle: ['bolt_sniper', 'semi_sniper'],
+  rifleSwitchCycle: ['assault_rifle', 'smg'],
   sniperBoltDelay: 0.3,         // Visual bolt animation delay
   sniperScopeFOV: 20,           // FOV when scoped in
   sniperScopeZoomSpeed: 8.0,    // How fast FOV transitions
@@ -202,6 +203,14 @@ let muzzleFlashTimer = 0;
 let hitMarkerMesh = null;
 let hitMarkerTimer = 0;
 let recoilOffset = 0;
+
+// ── Tahap 17: Weapon Switching & Inventory ─────────────────
+let previousSlot = 0;              // For Q quick-switch
+let isSwitchingWeapon = false;     // Switch animation in progress
+let switchAnimTimer = 0;           // Timer for switch animation
+let switchTargetSlot = -1;         // Target slot for switch
+const SWITCH_ANIM_DURATION = 0.15; // Duration of weapon switch animation
+let droppedWeapons = [];           // Array of dropped weapon pickups on the ground
 let recoilRecoverySpeed = 8.0;
 let shootCooldown = 0;
 
@@ -248,12 +257,16 @@ let shotgunPumpTimer = 0;
 
 // ── Tahap 16: Sniper State ────────────────────────────────
 let sniperGroup = null;         // Three.js Group for current sniper visual
+let rifleGroup = null;          // Three.js Group for current rifle visual
 let sniperRecoilOffset = 0;    // Visual recoil kick
 let sniperCurrentVariant = 'bolt_sniper'; // Current sniper variant in slot 5
 let sniperIdleTime = 0;
 let sniperBoltAnim = false;    // Bolt animation state
 let sniperBoltTimer = 0;
 let isSniperScoping = false;   // Whether player is holding right-click to scope
+let rifleCurrentVariant = 'assault_rifle'; // Current rifle variant in slot 3
+let rifleIdleTime = 0;
+let rifleRecoilOffset = 0;
 let currentFOV = 75;           // Current camera FOV (lerps between 75 and 20)
 let targetFOV = 75;            // Target FOV for smooth transition
 
@@ -320,13 +333,22 @@ function setupInputHandlers() {
       else if (key === 'r') startReload();
       // Tahap 14: Q key to cycle pistol variants when on pistol slot
       else if (key === 'q') {
+        // Q = quick-switch to previous weapon OR cycle variant if holding same type
         if (weaponInventory.currentSlot === 2) {
           cyclePistolVariant();
+        } else if (weaponInventory.currentSlot === 3) {
+          cycleRifleVariant();
         } else if (weaponInventory.currentSlot === 4) {
           cycleShotgunVariant();
         } else if (weaponInventory.currentSlot === 5) {
           cycleSniperVariant();
+        } else {
+          quickSwitchWeapon();
         }
+      }
+      // Tahap 17: B key to drop current weapon
+      else if (key === 'b') {
+        dropCurrentWeapon();
       }
     }
   }, true); // capture phase
@@ -639,6 +661,9 @@ function init() {
   // Tahap 15: Create shotgun visual (attached to camera, hidden initially)
   createShotgunVisual();
 
+  // Tahap 16+: Create rifle visual (attached to camera, hidden initially)
+  createRifleVisual();
+
   // Tahap 16: Create sniper visual (attached to camera, hidden initially)
   createSniperVisual();
 
@@ -779,6 +804,7 @@ function initializeWeaponAmmo() {
   weaponInventory.slots[3] = 'assault_rifle';
   weaponInventory.slots[4] = 'pump_shotgun';
   weaponInventory.slots[5] = 'bolt_sniper';
+  rifleCurrentVariant = 'assault_rifle';
 }
 
 // ── Tahap 09: Weapon Helper Functions ──────────────────────
@@ -826,15 +852,7 @@ function isMeleeWeapon(weaponData) {
   return weaponData && (weaponData.type === 'fist' || weaponData.type === 'melee');
 }
 
-function switchWeaponSlot(slot) {
-  if (slot >= 0 && slot < weaponInventory.slots.length) {
-    if (weaponInventory.slots[slot] !== null || slot === 0) {
-      weaponInventory.currentSlot = slot;
-      isReloading = false; // Cancel reload on weapon switch
-      updateWeaponHud();
-    }
-  }
-}
+// switchWeaponSlot is now defined in Tahap 17 section with animation support
 
 // ── Tahap 09: Update Weapon HUD ────────────────────────────
 function updateWeaponHud() {
@@ -879,12 +897,16 @@ function updateWeaponHud() {
   // Tahap 10: Update slot indicator
   if (weaponSlotEl) {
     const slotInfo = '[' + (weaponInventory.currentSlot + 1) + '/6]';
-    // Tahap 14: Show pistol variant in slot indicator
-    if (weaponInventory.currentSlot === 2 && weapon.data.type === 'pistol') {
+    // Tahap 14: Show weapon variant in slot indicator
+    // Note: getWeaponById returns the data directly, so use .type not .data.type
+    const wType = weapon.type;
+    if (weaponInventory.currentSlot === 2 && wType === 'pistol') {
       weaponSlotEl.textContent = slotInfo + ' ' + weapon.name;
-    } else if (weaponInventory.currentSlot === 4 && weapon.data.type === 'shotgun') {
+    } else if (weaponInventory.currentSlot === 3 && wType === 'rifle') {
       weaponSlotEl.textContent = slotInfo + ' ' + weapon.name;
-    } else if (weaponInventory.currentSlot === 5 && weapon.data.type === 'sniper') {
+    } else if (weaponInventory.currentSlot === 4 && wType === 'shotgun') {
+      weaponSlotEl.textContent = slotInfo + ' ' + weapon.name;
+    } else if (weaponInventory.currentSlot === 5 && wType === 'sniper') {
       weaponSlotEl.textContent = slotInfo + ' ' + weapon.name;
     } else {
       weaponSlotEl.textContent = slotInfo;
@@ -1000,6 +1022,10 @@ function shoot() {
   }
 
   // Tahap 16: Sniper-specific visual recoil + bolt animation
+  if (wData.type === 'rifle') {
+    const rifleRecoil = wId === 'smg' ? 0.15 : 0.3;
+    rifleRecoilOffset = Math.min(rifleRecoilOffset + rifleRecoil, 1.0);
+  }
   if (wData.type === 'sniper') {
     const sniperRecoil = CONFIG.sniperRecoil[wId] || 0.5;
     sniperRecoilOffset = Math.min(sniperRecoilOffset + sniperRecoil, 1.0);
@@ -1885,51 +1911,65 @@ function showDamageFlash(intensity) {
   }, 100);
 }
 
-// ── Smoke Cloud (BUG FIX v2: opaque from inside, proper dissipation) ─────────
+// ── Smoke Cloud (v4: Dense smoke, sprite-based, no lag) ─────────
 function createSmokeCloud(position, grenadeData) {
-  // BUG FIX v3: Drastically simplified for performance
-  // The main FPS killer was too many 3D particles with per-frame drift/scale updates
-  // Now: only 8 large 3D particles (just for visual from outside) + CSS overlay handles inside view
-  // The CSS overlay is the primary mechanism for "inside smoke" visibility blocking
-  const radius = CONFIG.smokeRadius || 5;
+  // v4: Uses THREE.Sprite instead of Mesh — MUCH faster rendering
+  // Sprites are always camera-facing, no geometry updates needed
+  // 20 sprites with high opacity = dense smoke from outside
+  // CSS overlay handles "inside smoke" visibility blocking (no per-frame 3D work)
+  const radius = CONFIG.smokeRadius || 6;
   const duration = grenadeData.duration || CONFIG.smokeGrenadeDuration;
-  const particleCount = CONFIG.smokeParticleCount || 8;
+  const particleCount = CONFIG.smokeParticleCount || 20;
+
+  // Create a single shared canvas texture for all smoke sprites
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  // Draw a soft radial gradient (smoke puff shape)
+  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(200,200,200,1.0)');
+  grad.addColorStop(0.3, 'rgba(180,180,180,0.8)');
+  grad.addColorStop(0.6, 'rgba(160,160,160,0.4)');
+  grad.addColorStop(1.0, 'rgba(140,140,140,0.0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 64);
+  const smokeTexture = new THREE.CanvasTexture(canvas);
 
   const smokeParticles = [];
 
   for (let i = 0; i < particleCount; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * radius * 0.7;
-    const height = Math.random() * 2.5 + 0.3;
+    const dist = Math.random() * radius * 0.8;
+    const height = Math.random() * 3.0 + 0.2;
 
-    const size = 2.0 + Math.random() * 2.0;
-    // Use very low-poly sphere for smoke (4 segments)
-    const geo = new THREE.SphereGeometry(size, 4, 4);
-    
-    const baseOpacity = 0.15 + Math.random() * 0.1;
-    
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xbbbbbb,
+    const spriteMat = new THREE.SpriteMaterial({
+      map: smokeTexture,
+      color: 0xcccccc,
       transparent: true,
       opacity: 0,
       depthWrite: false,
+      fog: true,
     });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(
+
+    const sprite = new THREE.Sprite(spriteMat);
+    // Sprite scale = size in world units
+    const size = 3.0 + Math.random() * 3.0;
+    sprite.scale.set(size, size, 1);
+    sprite.position.set(
       position.x + Math.cos(angle) * dist,
       position.y + height,
       position.z + Math.sin(angle) * dist
     );
 
-    scene.add(mesh);
+    scene.add(sprite);
+    const baseOpacity = 0.35 + Math.random() * 0.2;
     smokeParticles.push({
-      mesh: mesh,
+      mesh: sprite,
       targetOpacity: baseOpacity,
       fadeIn: true,
-      fadeSpeed: 0.3 + Math.random() * 0.1,
+      fadeSpeed: 0.4 + Math.random() * 0.15,
       distFromCenter: dist / radius,
-      initialDist: dist,
-      initialSize: size,
     });
   }
 
@@ -1951,18 +1991,17 @@ function updateSmokeClouds(deltaTime) {
     const remaining = cloud.duration - elapsed;
 
     if (remaining <= 0) {
-      // Remove smoke cloud
+      // Remove smoke cloud — dispose sprites
       for (const p of cloud.particles) {
         scene.remove(p.mesh);
-        p.mesh.geometry.dispose();
+        if (p.mesh.material.map) p.mesh.material.map.dispose();
         p.mesh.material.dispose();
       }
       activeSmokeClouds.splice(i, 1);
       continue;
     }
 
-    // BUG FIX v3: Simplified — no per-frame drift/scale, just fade in/out
-    // This eliminates the main FPS killer (per-particle position/scale updates)
+    // v4: Optimized — only fade in/out, no position/scale updates
     const fadeStartTime = cloud.duration * 0.6;
 
     for (const p of cloud.particles) {
@@ -1981,7 +2020,6 @@ function updateSmokeClouds(deltaTime) {
           p.mesh.material.opacity = p.targetOpacity * (1 - particleFadeProgress);
         }
       }
-      // No drift, no scale — CSS overlay handles the "inside smoke" visual
     }
   }
 }
@@ -4141,6 +4179,552 @@ function updateSniper(deltaTime) {
   }
 }
 
+
+// ══════════════════════════════════════════════════════════════
+//  TAHAP 16+: RIFLE / SMG VISUAL & MECHANICS
+// ══════════════════════════════════════════════════════════════
+
+function createRifleVisual() {
+  // Create the rifle group
+  rifleGroup = new THREE.Group();
+  rifleGroup.name = 'rifle';
+
+  const currentVariant = weaponInventory.slots[3] || 'assault_rifle';
+  buildRifleModel(currentVariant);
+
+  rifleGroup.position.set(0.30, -0.28, -0.45);
+  rifleGroup.rotation.set(0.05, -0.15, 0.0);
+  camera.add(rifleGroup);
+  rifleGroup.visible = false;
+}
+
+function buildRifleModel(variantId) {
+  // Clear existing children
+  while (rifleGroup.children.length > 0) {
+    const child = rifleGroup.children[0];
+    rifleGroup.remove(child);
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) child.material.dispose();
+  }
+
+  const isSMG = variantId === 'smg';
+
+  // Materials
+  const metalMat = new THREE.MeshPhongMaterial({ color: 0x2a2a2a, shininess: 60 });
+  const darkMetalMat = new THREE.MeshPhongMaterial({ color: 0x1a1a1a, shininess: 40 });
+  const gripMat = new THREE.MeshPhongMaterial({ color: 0x3a2a1a, shininess: 15 });
+  const accentMat = new THREE.MeshPhongMaterial({ color: 0x444444, shininess: 30 });
+
+  if (isSMG) {
+    // ── SMG: MP5-style compact submachine gun ──
+    // Key features: compact receiver, short barrel, curved magazine, 
+    // HK-style drum sights, forward grip, retractable stock
+
+    // Upper receiver (compact, slightly tapered)
+    const upperReceiver = new THREE.Mesh(
+      new THREE.BoxGeometry(0.030, 0.035, 0.18),
+      metalMat
+    );
+    upperReceiver.position.set(0, 0.010, 0.01);
+    rifleGroup.add(upperReceiver);
+
+    // Lower receiver (trigger housing, slightly smaller)
+    const lowerReceiver = new THREE.Mesh(
+      new THREE.BoxGeometry(0.028, 0.025, 0.14),
+      darkMetalMat
+    );
+    lowerReceiver.position.set(0, -0.015, 0.0);
+    rifleGroup.add(lowerReceiver);
+
+    // Top rail (Picatinny-style with ridges)
+    const railBase = new THREE.Mesh(
+      new THREE.BoxGeometry(0.022, 0.008, 0.16),
+      new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 50 })
+    );
+    railBase.position.set(0, 0.030, 0.01);
+    rifleGroup.add(railBase);
+
+    // Rail ridges (detail)
+    for (let r = -0.06; r <= 0.08; r += 0.014) {
+      const ridge = new THREE.Mesh(
+        new THREE.BoxGeometry(0.024, 0.004, 0.004),
+        new THREE.MeshPhongMaterial({ color: 0x2a2a2a, shininess: 60 })
+      );
+      ridge.position.set(0, 0.035, r);
+      rifleGroup.add(ridge);
+    }
+
+    // Front sight (HK drum-style)
+    const frontSightPost = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.003, 0.003, 0.022, 6),
+      darkMetalMat
+    );
+    frontSightPost.position.set(0, 0.043, 0.07);
+    rifleGroup.add(frontSightPost);
+
+    // Front sight ring (HK drum)
+    const frontSightRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.008, 0.002, 6, 12),
+      darkMetalMat
+    );
+    frontSightRing.position.set(0, 0.043, 0.07);
+    frontSightRing.rotation.y = Math.PI / 2;
+    rifleGroup.add(frontSightRing);
+
+    // Rear sight (HK drum-style)
+    const rearSightPost = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.003, 0.003, 0.018, 6),
+      darkMetalMat
+    );
+    rearSightPost.position.set(0, 0.042, -0.05);
+    rifleGroup.add(rearSightPost);
+
+    // Rear sight aperture
+    const rearSightAperture = new THREE.Mesh(
+      new THREE.BoxGeometry(0.016, 0.016, 0.004),
+      darkMetalMat
+    );
+    rearSightAperture.position.set(0, 0.042, -0.05);
+    rifleGroup.add(rearSightAperture);
+
+    // Barrel (short — SMG signature)
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.006, 0.006, 0.10, 8),
+      new THREE.MeshPhongMaterial({ color: 0x1a1a1a, shininess: 80 })
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.005, 0.14);
+    rifleGroup.add(barrel);
+
+    // Barrel with 3-lug muzzle (MP5 style)
+    const muzzleLug1 = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.008, 0.007, 0.015, 8),
+      darkMetalMat
+    );
+    muzzleLug1.rotation.x = Math.PI / 2;
+    muzzleLug1.position.set(0, 0.005, 0.19);
+    rifleGroup.add(muzzleLug1);
+
+    // Muzzle flash hider
+    const flashHider = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.009, 0.007, 0.020, 8),
+      new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 90 })
+    );
+    flashHider.rotation.x = Math.PI / 2;
+    flashHider.position.set(0, 0.005, 0.205);
+    rifleGroup.add(flashHider);
+
+    // Handguard (shorter, with ventilation)
+    const handguard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.028, 0.035, 0.08),
+      accentMat
+    );
+    handguard.position.set(0, 0.005, 0.08);
+    rifleGroup.add(handguard);
+
+    // Handguard ventilation holes (detail)
+    for (let v = 0.05; v <= 0.11; v += 0.02) {
+      const ventHole = new THREE.Mesh(
+        new THREE.BoxGeometry(0.030, 0.006, 0.006),
+        new THREE.MeshPhongMaterial({ color: 0x1a1a1a, shininess: 30 })
+      );
+      ventHole.position.set(0, -0.008, v);
+      rifleGroup.add(ventHole);
+    }
+
+    // Vertical foregrip (SMG distinctive feature — angled)
+    const foregripBase = new THREE.Mesh(
+      new THREE.BoxGeometry(0.016, 0.035, 0.020),
+      gripMat
+    );
+    foregripBase.position.set(0, -0.035, 0.06);
+    rifleGroup.add(foregripBase);
+
+    // Foregrip finger groove
+    const foregripGroove = new THREE.Mesh(
+      new THREE.BoxGeometry(0.014, 0.020, 0.010),
+      new THREE.MeshPhongMaterial({ color: 0x2a1a0a, shininess: 10 })
+    );
+    foregripGroove.position.set(0, -0.048, 0.06);
+    rifleGroup.add(foregripGroove);
+
+    // Magazine (curved — MP5 signature curved 9mm mag)
+    const magUpper = new THREE.Mesh(
+      new THREE.BoxGeometry(0.014, 0.04, 0.022),
+      darkMetalMat
+    );
+    magUpper.position.set(0, -0.040, 0.02);
+    rifleGroup.add(magUpper);
+
+    // Magazine lower (curved forward)
+    const magLower = new THREE.Mesh(
+      new THREE.BoxGeometry(0.014, 0.06, 0.020),
+      darkMetalMat
+    );
+    magLower.position.set(0, -0.080, 0.035);
+    magLower.rotation.x = 0.15;
+    rifleGroup.add(magLower);
+
+    // Magazine base plate
+    const magBasePlate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.016, 0.006, 0.024),
+      new THREE.MeshPhongMaterial({ color: 0x222222, shininess: 40 })
+    );
+    magBasePlate.position.set(0, -0.112, 0.042);
+    magBasePlate.rotation.x = 0.15;
+    rifleGroup.add(magBasePlate);
+
+    // Trigger guard (curved)
+    const triggerGuard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.010, 0.006, 0.040),
+      darkMetalMat
+    );
+    triggerGuard.position.set(0, -0.030, -0.02);
+    rifleGroup.add(triggerGuard);
+
+    // Trigger
+    const trigger = new THREE.Mesh(
+      new THREE.BoxGeometry(0.004, 0.012, 0.006),
+      new THREE.MeshPhongMaterial({ color: 0x222222, shininess: 50 })
+    );
+    trigger.position.set(0, -0.028, -0.02);
+    rifleGroup.add(trigger);
+
+    // Pistol grip (ergonomic, textured)
+    const gripUpper = new THREE.Mesh(
+      new THREE.BoxGeometry(0.020, 0.030, 0.022),
+      gripMat
+    );
+    gripUpper.position.set(0, -0.035, -0.04);
+    gripUpper.rotation.x = 0.15;
+    rifleGroup.add(gripUpper);
+
+    const gripLower = new THREE.Mesh(
+      new THREE.BoxGeometry(0.018, 0.035, 0.020),
+      gripMat
+    );
+    gripLower.position.set(0, -0.055, -0.045);
+    gripLower.rotation.x = 0.25;
+    rifleGroup.add(gripLower);
+
+    // Grip texture lines (detail)
+    for (let g = -0.045; g <= -0.030; g += 0.005) {
+      const gripLine = new THREE.Mesh(
+        new THREE.BoxGeometry(0.021, 0.002, 0.023),
+        new THREE.MeshPhongMaterial({ color: 0x2a1a0a, shininess: 8 })
+      );
+      gripLine.position.set(0, g, -0.042);
+      gripLine.rotation.x = 0.20;
+      rifleGroup.add(gripLine);
+    }
+
+    // Stock (MP5 retractable — collapsed position)
+    const stockEndCap = new THREE.Mesh(
+      new THREE.BoxGeometry(0.022, 0.035, 0.012),
+      darkMetalMat
+    );
+    stockEndCap.position.set(0, 0.005, -0.10);
+    rifleGroup.add(stockEndCap);
+
+    // Stock buffer tube
+    const stockTube = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.006, 0.006, 0.08, 6),
+      darkMetalMat
+    );
+    stockTube.rotation.x = Math.PI / 2;
+    stockTube.position.set(0, 0.005, -0.14);
+    rifleGroup.add(stockTube);
+
+    // Stock butt (collapsed)
+    const stockButt = new THREE.Mesh(
+      new THREE.BoxGeometry(0.018, 0.030, 0.025),
+      accentMat
+    );
+    stockButt.position.set(0, 0.005, -0.17);
+    rifleGroup.add(stockButt);
+
+    // Stock butt pad
+    const buttPad = new THREE.Mesh(
+      new THREE.BoxGeometry(0.020, 0.032, 0.006),
+      gripMat
+    );
+    buttPad.position.set(0, 0.005, -0.185);
+    rifleGroup.add(buttPad);
+
+    // Ejection port (right side detail)
+    const ejectionPort = new THREE.Mesh(
+      new THREE.BoxGeometry(0.003, 0.010, 0.018),
+      new THREE.MeshPhongMaterial({ color: 0x0a0a0a, shininess: 100 })
+    );
+    ejectionPort.position.set(0.016, 0.005, -0.02);
+    rifleGroup.add(ejectionPort);
+
+    // Selector switch (left side)
+    const selector = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.003, 0.003, 0.008, 6),
+      new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 60 })
+    );
+    selector.rotation.z = Math.PI / 2;
+    selector.position.set(-0.016, 0.005, -0.04);
+    rifleGroup.add(selector);
+
+    // Charging handle (top)
+    const chargingHandle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.010, 0.008, 0.015),
+      new THREE.MeshPhongMaterial({ color: 0x333333, shininess: 50 })
+    );
+    chargingHandle.position.set(0, 0.030, -0.04);
+    rifleGroup.add(chargingHandle);
+
+    // Sling mount (front)
+    const slingMountFront = new THREE.Mesh(
+      new THREE.TorusGeometry(0.005, 0.002, 4, 8),
+      darkMetalMat
+    );
+    slingMountFront.position.set(0.016, 0.005, 0.10);
+    rifleGroup.add(slingMountFront);
+
+    // Sling mount (rear)
+    const slingMountRear = new THREE.Mesh(
+      new THREE.TorusGeometry(0.005, 0.002, 4, 8),
+      darkMetalMat
+    );
+    slingMountRear.position.set(-0.016, 0.005, -0.10);
+    rifleGroup.add(slingMountRear);
+
+  } else {
+    // ── Assault Rifle: M4/AR-15 style ──
+    // Long barrel, full-length handguard, carry handle, stock
+
+    // Main receiver body
+    const receiver = new THREE.Mesh(
+      new THREE.BoxGeometry(0.038, 0.055, 0.25),
+      metalMat
+    );
+    receiver.position.set(0, 0, 0);
+    rifleGroup.add(receiver);
+
+    // Carry handle / rail
+    const carryHandle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.028, 0.025, 0.16),
+      darkMetalMat
+    );
+    carryHandle.position.set(0, 0.040, -0.02);
+    rifleGroup.add(carryHandle);
+
+    // Rear sight on carry handle
+    const rearSight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.022, 0.018, 0.008),
+      darkMetalMat
+    );
+    rearSight.position.set(0, 0.055, -0.06);
+    rifleGroup.add(rearSight);
+
+    // Front sight post
+    const frontSightBase = new THREE.Mesh(
+      new THREE.BoxGeometry(0.012, 0.030, 0.012),
+      darkMetalMat
+    );
+    frontSightBase.position.set(0, 0.04, 0.16);
+    rifleGroup.add(frontSightBase);
+
+    // Barrel (long)
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.009, 0.009, 0.22, 8),
+      darkMetalMat
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.01, 0.24);
+    rifleGroup.add(barrel);
+
+    // Barrel flash hider
+    const flashHider = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.011, 0.009, 0.03, 8),
+      new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 80 })
+    );
+    flashHider.rotation.x = Math.PI / 2;
+    flashHider.position.set(0, 0.01, 0.36);
+    rifleGroup.add(flashHider);
+
+    // Handguard (long)
+    const handguard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.035, 0.045, 0.18),
+      accentMat
+    );
+    handguard.position.set(0, 0.005, 0.12);
+    rifleGroup.add(handguard);
+
+    // Handguard rail sections
+    const railSection = new THREE.Mesh(
+      new THREE.BoxGeometry(0.020, 0.006, 0.05),
+      darkMetalMat
+    );
+    railSection.position.set(0, 0.028, 0.10);
+    rifleGroup.add(railSection);
+
+    // Magazine (STANAG style, straight)
+    const mag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.018, 0.12, 0.028),
+      darkMetalMat
+    );
+    mag.position.set(0, -0.085, 0.02);
+    mag.rotation.x = 0.08;
+    rifleGroup.add(mag);
+
+    // Magazine well
+    const magWell = new THREE.Mesh(
+      new THREE.BoxGeometry(0.022, 0.025, 0.030),
+      metalMat
+    );
+    magWell.position.set(0, -0.035, 0.02);
+    rifleGroup.add(magWell);
+
+    // Trigger guard
+    const triggerGuard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.012, 0.010, 0.040),
+      darkMetalMat
+    );
+    triggerGuard.position.set(0, -0.038, -0.02);
+    rifleGroup.add(triggerGuard);
+
+    // Pistol grip
+    const grip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.024, 0.065, 0.028),
+      gripMat
+    );
+    grip.position.set(0, -0.055, -0.05);
+    grip.rotation.x = 0.20;
+    rifleGroup.add(grip);
+
+    // Stock (collapsible M4 style)
+    const stockTube = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.010, 0.010, 0.12, 6),
+      darkMetalMat
+    );
+    stockTube.rotation.x = Math.PI / 2;
+    stockTube.position.set(0, 0.01, -0.18);
+    rifleGroup.add(stockTube);
+
+    const stockBody = new THREE.Mesh(
+      new THREE.BoxGeometry(0.025, 0.045, 0.08),
+      accentMat
+    );
+    stockBody.position.set(0, 0.005, -0.22);
+    rifleGroup.add(stockBody);
+
+    // Stock butt pad
+    const buttPad = new THREE.Mesh(
+      new THREE.BoxGeometry(0.028, 0.050, 0.012),
+      gripMat
+    );
+    buttPad.position.set(0, 0.005, -0.26);
+    rifleGroup.add(buttPad);
+
+    // Forward assist (right side)
+    const forwardAssist = new THREE.Mesh(
+      new THREE.BoxGeometry(0.006, 0.015, 0.015),
+      darkMetalMat
+    );
+    forwardAssist.position.set(0.020, 0.015, -0.06);
+    rifleGroup.add(forwardAssist);
+
+    // Ejection port (right side)
+    const ejectionPort = new THREE.Mesh(
+      new THREE.BoxGeometry(0.004, 0.014, 0.022),
+      new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 80 })
+    );
+    ejectionPort.position.set(0.020, 0.012, -0.03);
+    rifleGroup.add(ejectionPort);
+
+    // Charging handle (top)
+    const chargingHandle = new THREE.Mesh(
+      new THREE.BoxGeometry(0.012, 0.012, 0.020),
+      darkMetalMat
+    );
+    chargingHandle.position.set(0, 0.035, -0.06);
+    rifleGroup.add(chargingHandle);
+  }
+}
+
+function updateRifle(deltaTime) {
+  if (!rifleGroup) return;
+
+  const weapon = getCurrentWeapon();
+  const isRifleWeapon = weapon && (weapon.data.type === 'rifle');
+
+  // Show/hide rifle based on current weapon
+  if (isRifleWeapon) {
+    rifleGroup.visible = true;
+
+    // Check if the rifle variant changed (via Q sub-switch)
+    const currentSlotId = weaponInventory.slots[3];
+    if (currentSlotId !== rifleCurrentVariant) {
+      rifleCurrentVariant = currentSlotId;
+      buildRifleModel(rifleCurrentVariant);
+    }
+
+    // SMG is more compact — position closer to camera
+    const isSMG = currentSlotId === 'smg';
+    if (isSMG) {
+      rifleGroup.scale.set(0.85, 0.85, 0.85);
+    } else {
+      rifleGroup.scale.set(1, 1, 1);
+    }
+  } else {
+    rifleGroup.visible = false;
+    rifleRecoilOffset = 0;
+    return;
+  }
+
+  // Rifle recoil animation
+  if (rifleRecoilOffset > 0) {
+    rifleRecoilOffset -= deltaTime * 6.0;
+    if (rifleRecoilOffset < 0) rifleRecoilOffset = 0;
+  }
+
+  // Apply recoil to rifle position
+  const recoilAmount = rifleRecoilOffset;
+  rifleGroup.position.z = -0.45 + recoilAmount * 0.06;
+  rifleGroup.position.y = -0.28 + recoilAmount * 0.015;
+  rifleGroup.rotation.x = 0.05 + recoilAmount * 0.2;
+
+  // Idle animation: slight bob
+  if (rifleRecoilOffset < 0.01) {
+    rifleIdleTime += deltaTime;
+    const bobY = Math.sin(rifleIdleTime * 2) * 0.002;
+    const bobX = Math.cos(rifleIdleTime * 1.5) * 0.001;
+    rifleGroup.position.y = -0.28 + bobY;
+    rifleGroup.position.x = 0.30 + bobX;
+    rifleGroup.rotation.x = 0.05;
+    rifleGroup.position.z = -0.45;
+  }
+}
+
+function cycleRifleVariant() {
+  const cycle = CONFIG.rifleSwitchCycle;
+  const currentIdx = cycle.indexOf(rifleCurrentVariant);
+  const nextIdx = (currentIdx + 1) % cycle.length;
+  const nextVariant = cycle[nextIdx];
+
+  // Update the inventory slot
+  weaponInventory.slots[3] = nextVariant;
+  rifleCurrentVariant = nextVariant;
+
+  // Initialize ammo for new variant
+  const wData = getWeaponById(nextVariant);
+  if (wData && wData.magazine) {
+    weaponInventory.ammo[nextVariant] = wData.magazine;
+    weaponInventory.reserveAmmo[nextVariant] = wData.magazine * 3;
+  }
+
+  // If we're already on rifle slot, update HUD
+  if (weaponInventory.currentSlot === 3) {
+    updateWeaponHud();
+  }
+
+  console.log('Switched rifle to: ' + nextVariant);
+}
+
 function cycleSniperVariant() {
   // Tahap 16: Sub-switch between sniper variants using Q key
   const cycle = CONFIG.sniperSwitchCycle;
@@ -4170,6 +4754,196 @@ function cycleSniperVariant() {
   }
 
   console.log('Switched sniper to: ' + nextVariant);
+}
+
+
+// ══════════════════════════════════════════════════════════════
+//  TAHAP 17: WEAPON SWITCHING & INVENTORY
+// ══════════════════════════════════════════════════════════════
+
+function switchWeaponSlot(newSlot) {
+  if (newSlot < 0 || newSlot >= weaponInventory.slots.length) return;
+  if (newSlot === weaponInventory.currentSlot) return;
+  if (isSwitchingWeapon) return;
+
+  // Check if slot has a weapon (slot 0 = fist always available)
+  if (weaponInventory.slots[newSlot] === null && newSlot !== 0) return;
+
+  // Unscope if switching from sniper
+  if (isSniperScoping) {
+    isSniperScoping = false;
+    targetFOV = CONFIG.cameraFOV;
+  }
+
+  // Start switch animation
+  previousSlot = weaponInventory.currentSlot;
+  switchTargetSlot = newSlot;
+  isSwitchingWeapon = true;
+  switchAnimTimer = 0;
+  isReloading = false;
+}
+
+function updateWeaponSwitch(deltaTime) {
+  if (!isSwitchingWeapon) return;
+
+  switchAnimTimer += deltaTime;
+
+  // Phase 1: Lower current weapon (first half)
+  if (switchAnimTimer < SWITCH_ANIM_DURATION) {
+    const t = switchAnimTimer / SWITCH_ANIM_DURATION;
+    // Lower all weapon groups
+    const lowerOffset = t * 0.3;
+    if (fistGroup) fistGroup.position.y = -0.24 - lowerOffset;
+    if (leftFistGroup) leftFistGroup.position.y = -0.24 - lowerOffset;
+    if (knifeGroup) knifeGroup.position.y = -0.22 - lowerOffset;
+    if (pistolGroup) pistolGroup.position.y = -0.25 - lowerOffset;
+    if (rifleGroup) rifleGroup.position.y = -0.28 - lowerOffset;
+    if (shotgunGroup) shotgunGroup.position.y = -0.26 - lowerOffset;
+    if (sniperGroup) sniperGroup.position.y = -0.24 - lowerOffset;
+  } else {
+    // Phase 2: Switch to new weapon and raise
+    if (switchAnimTimer < SWITCH_ANIM_DURATION * 2) {
+      // Actually switch the slot
+      if (weaponInventory.currentSlot !== switchTargetSlot) {
+        weaponInventory.currentSlot = switchTargetSlot;
+        updateWeaponHud();
+      }
+
+      const t = (switchAnimTimer - SWITCH_ANIM_DURATION) / SWITCH_ANIM_DURATION;
+      const raiseOffset = (1 - t) * 0.3;
+      // Raise new weapon
+      if (fistGroup) fistGroup.position.y = -0.24 - raiseOffset;
+      if (leftFistGroup) leftFistGroup.position.y = -0.24 - raiseOffset;
+      if (knifeGroup) knifeGroup.position.y = -0.22 - raiseOffset;
+      if (pistolGroup) pistolGroup.position.y = -0.25 - raiseOffset;
+      if (rifleGroup) rifleGroup.position.y = -0.28 - raiseOffset;
+      if (shotgunGroup) shotgunGroup.position.y = -0.26 - raiseOffset;
+      if (sniperGroup) sniperGroup.position.y = -0.24 - raiseOffset;
+    } else {
+      // Animation complete
+      if (weaponInventory.currentSlot !== switchTargetSlot) {
+        weaponInventory.currentSlot = switchTargetSlot;
+        updateWeaponHud();
+      }
+      isSwitchingWeapon = false;
+      switchTargetSlot = -1;
+    }
+  }
+}
+
+function quickSwitchWeapon() {
+  // Q key: switch to previous weapon
+  if (previousSlot !== weaponInventory.currentSlot) {
+    switchWeaponSlot(previousSlot);
+  }
+}
+
+function dropCurrentWeapon() {
+  // Can't drop fists
+  if (weaponInventory.currentSlot === 0) return;
+  // Can't drop knife (slot 1 is always available)
+  if (weaponInventory.currentSlot === 1) return;
+
+  const slotId = weaponInventory.slots[weaponInventory.currentSlot];
+  if (!slotId) return;
+
+  const weapon = getWeaponById(slotId);
+  if (!weapon) return;
+
+  // Create a pickup mesh at the player's position
+  const pickupGeo = new THREE.BoxGeometry(0.3, 0.1, 0.15);
+  const pickupMat = new THREE.MeshPhongMaterial({
+    color: weapon.type === 'pistol' ? 0x888888 :
+           weapon.type === 'rifle' ? 0x555555 :
+           weapon.type === 'shotgun' ? 0x664433 :
+           weapon.type === 'sniper' ? 0x444444 : 0x777777,
+    shininess: 30
+  });
+  const pickupMesh = new THREE.Mesh(pickupGeo, pickupMat);
+  pickupMesh.position.set(
+    camera.position.x + Math.sin(yaw) * 1.0,
+    0.15,
+    camera.position.z + Math.cos(yaw) * 1.0
+  );
+  pickupMesh.name = 'weapon_pickup_' + slotId;
+  scene.add(pickupMesh);
+
+  // Store the dropped weapon info
+  droppedWeapons.push({
+    mesh: pickupMesh,
+    weaponId: slotId,
+    slot: weaponInventory.currentSlot,
+    ammo: weaponInventory.ammo[slotId] || 0,
+    reserve: weaponInventory.reserveAmmo[slotId] || 0,
+  });
+
+  // Remove from inventory
+  weaponInventory.slots[weaponInventory.currentSlot] = null;
+  delete weaponInventory.ammo[slotId];
+  delete weaponInventory.reserveAmmo[slotId];
+
+  // Switch to fist
+  switchWeaponSlot(0);
+  updateWeaponHud();
+}
+
+function checkWeaponPickups() {
+  const playerPos = camera.position;
+  const pickupRadius = 1.5;
+
+  for (let i = droppedWeapons.length - 1; i >= 0; i--) {
+    const dw = droppedWeapons[i];
+    const dx = playerPos.x - dw.mesh.position.x;
+    const dz = playerPos.z - dw.mesh.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist < pickupRadius) {
+      // Pick up the weapon
+      const targetSlot = dw.slot;
+      // Only pick up if slot is empty or same weapon
+      if (weaponInventory.slots[targetSlot] === null || weaponInventory.slots[targetSlot] === dw.weaponId) {
+        weaponInventory.slots[targetSlot] = dw.weaponId;
+        weaponInventory.ammo[dw.weaponId] = dw.ammo;
+        weaponInventory.reserveAmmo[dw.weaponId] = dw.reserve;
+
+        // Remove pickup mesh
+        scene.remove(dw.mesh);
+        dw.mesh.geometry.dispose();
+        dw.mesh.material.dispose();
+        droppedWeapons.splice(i, 1);
+
+        // Update HUD
+        updateWeaponHud();
+
+        // Show pickup notification
+        const weapon = getWeaponById(dw.weaponId);
+        if (weapon) {
+          showPickupNotification('Picked up: ' + weapon.name);
+        }
+      }
+    }
+  }
+}
+
+function showPickupNotification(text) {
+  const notif = document.getElementById('pickup-notification');
+  if (notif) {
+    notif.textContent = text;
+    notif.style.display = 'block';
+    notif.style.opacity = '1';
+    setTimeout(() => {
+      notif.style.opacity = '0';
+      setTimeout(() => { notif.style.display = 'none'; }, 500);
+    }, 1500);
+  }
+}
+
+// Make dropped weapons bob/rotate
+function updateDroppedWeapons(deltaTime) {
+  for (const dw of droppedWeapons) {
+    dw.mesh.rotation.y += deltaTime * 2.0;
+    dw.mesh.position.y = 0.15 + Math.sin(performance.now() / 1000 * 2 + dw.mesh.position.x) * 0.05;
+  }
 }
 
 // ── Tahap 08: Arena Map Builder ────────────────────────────
@@ -4797,6 +5571,10 @@ function animate() {
   updatePistol(deltaTime);   // Tahap 14
   updateShotgun(deltaTime);  // Tahap 15
   updateSniper(deltaTime);   // Tahap 16
+  updateRifle(deltaTime);    // Tahap 16+: Rifle/SMG
+  updateWeaponSwitch(deltaTime); // Tahap 17: Weapon switch animation
+  updateDroppedWeapons(deltaTime); // Tahap 17: Dropped weapon bob
+  checkWeaponPickups();          // Tahap 17: Pickup detection
   updateSmokeOverlay();      // Tahap 11 fix: screen-space smoke overlay
   updateCrosshair();
   updateDebugInfo(deltaTime);
