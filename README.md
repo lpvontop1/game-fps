@@ -84,7 +84,8 @@ fps-game/
 | 18 | Sistem Armor — Helmet, Vest, Celana, Sepatu | ✅ Selesai |
 | 19 | HP & Damage Calculation — Death & Respawn | ✅ Selesai |
 | 20 | Bot AI — Pergerakan & Pathfinding (v2) | ✅ Selesai |
-| 21–36 | Bot AI Shooting, Combat, Tim, Mode, UI, Polish | 🔜 Mendatang |
+| 21 | Bot AI — Menembak & Targeting (v3) | ✅ Selesai |
+| 22–36 | Bot AI Combat, Tim, Mode, UI, Polish | 🔜 Mendatang |
 
 ## Senjata Tersedia
 
@@ -106,6 +107,26 @@ fps-game/
 | Vest | Vest Light / Medium / Heavy | +15 / +30 / +60 | — |
 | Pants | Pants Light / Medium / Heavy | +8 / +20 / +40 | — |
 | Shoes | Shoes Light / Medium / Heavy | +5 / +12 / +25 | +0.5 SPD / — / -1 SPD |
+
+## Fitur Tahap 21 — Bot AI Shooting & Targeting (v3)
+
+- **Bot shooting**: Bot menembak ke pemain dengan Glock (damage 20, rate 3.0/s)
+- **Line of Sight (LOS)**: Bot hanya menembak jika bisa melihat pemain — tidak bisa wall hack!
+- **LOS check**: Raycast dari bot ke pemain, memeriksa apakah ada dinding/cover menghalangi
+- **Accuracy**: Medium bot (spread 0.04, ~60% hit chance), tidak 100% akurat
+- **Shoot delay**: Random delay ±0.3s pada fire rate untuk variasi tembakan
+- **Muzzle flash**: Visual flash di bot saat menembak (sama seperti pemain)
+- **Bullet trail**: Garis trail visual dari bot ke arah tembakan
+- **Damage falloff**: Damage berkurang 50% di jarak maksimum (60 unit)
+- **State machine**: idle → patrol → chase → shoot (saat dalam range dan LOS)
+- **Weapon pose (v3)**: Tangan kanan bot memegang pistol dengan pose aiming, tangan kiri berayun
+- **Gun model (v3)**: Glock model (body + handle) terpasang di tangan kanan bot
+- **Animation pose (v3)**: Right arm tetap di pose aiming saat walking, idle, jumping — hanya subtle bob
+- **Improved pathfinding (v3)**: Bot langsung menuju pemain saat LOS clear, waypoint-based navigation saat path terblokir
+- **Narrow gap navigation (v3)**: Bot radius lebih kecil (0.35 vs 0.5) agar bisa melewati celah sempit (pintu, choke point)
+- **Waypoint system (v3)**: Door-gap waypoints — titik navigasi di pintu masuk, choke point, dan celah koridor
+- **Direct movement (v3)**: Bot bergerak langsung ke pemain (bukan strafe berputar-putar)
+- **Melee hit fix (v3)**: Fist dan Knife sekarang bisa mengenai bot — checkBotHit() dipanggil SEBELUM wall check
 
 ## Fitur Tahap 20 — Bot AI (v2)
 
@@ -155,6 +176,15 @@ fps-game/
 - **Quick-switch**: Tombol Q = cycle weapon variant (Pistol/Rifle/Shotgun/Sniper)
 - **Inventory tracking**: Dropped weapons retain ammo state, variant removal from ownedVariants
 - **Slot skip**: Switching slots otomatis skip ke variant yang tersedia
+
+## Bug Fixes (Tahap 21 v3)
+
+- **Bot melee kill fix**: checkBotHit() dipanggil SEBELUM wall check di doFistPunch() dan doKnifeSlash() — bot sekarang bisa dibunuh dengan tangan kosong dan pisau
+- **Bot narrow gap navigation**: Bot radius dikurangi (0.35 vs 0.5) sehingga bisa melewati celah sempit (pintu, choke point)
+- **Bot movement fix**: Bot sekarang bergerak langsung ke pemain (direct movement) saat LOS clear, bukan strafe berputar-putar
+- **Bot pathfinding improvement**: Waypoint-based navigation saat direct path terblokir, door-gap waypoints di pintu masuk dan choke point
+- **Bot wall hack fix**: Line of Sight check — bot tidak menembak jika ada dinding menghalangi
+- **Bot shooting**: Bot sekarang benar-benar menembak saat pemain terlihat di line of sight
 
 ## Bug Fixes (Tahap 20 v2)
 
