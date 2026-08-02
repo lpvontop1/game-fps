@@ -1,6 +1,6 @@
 /* ============================================================
-   script.js — FPS Game Tahap 18: Armor System
-   + Tahap 01-17 + Bug fixes (smoke v5, weapon drop cooldown, scope)
+   script.js — FPS Game Tahap 19: HP & Damage Calculation
+   + Tahap 01-18 + Bug fixes v7 (smoke, weapon drop, armor, cycle)
    ============================================================ */
 
 // ── Konfigurasi ──────────────────────────────────────────────
@@ -85,7 +85,7 @@ const CONFIG = {
   grenadeMaxBounces: 3,
   grenadeTimer: 3.0,
   smokeGrenadeDuration: 12,
-  smokeParticleCount: 40,    // v5: 40 sprites — dense enough to block vision from outside
+  smokeParticleCount: 12,    // v7: Reduced from 20 to 12 — large sprites still cover well
   smokeRadius: 7,            // v5: Larger radius for realistic smoke coverage
   smokePickupCooldown: 2.0,  // Seconds before a dropped weapon can be picked up again
 
@@ -279,7 +279,27 @@ const armorInventory = {
   shoes: null,    // Currently equipped shoes item
 };
 let isInventoryOpen = false;    // Whether the armor inventory screen is open
+let lastDropTime = 0;           // Cooldown for weapon drop to prevent rapid key repeat
 let armorSpeedBonus = 0;        // Speed bonus from shoes (can be negative for penalty)
+
+// ── Tahap 19: HP & Damage System ────────────────────────────
+let playerHP = 100;            // Current player HP (max 100)
+let playerMaxHP = 100;         // Maximum player HP
+let isPlayerDead = false;      // Whether the player is dead
+let deathTime = 0;             // Time when player died
+const DEATH_RESPAWN_TIME = 3.0; // Seconds before respawn
+let damageFlashTimer = 0;      // Timer for red screen flash on damage
+let lastDamageSource = '';     // What caused the last damage
+const SPAWN_POINT = { x: 0, y: 1.7, z: 0 }; // Default spawn point
+
+// ── Weapon ownership tracking (per-variant) ────────────────
+// Tracks which specific weapon variants the player owns
+const ownedVariants = {
+  2: ['glock', 'revolver', 'deagle'],  // Pistol slot
+  3: ['assault_rifle', 'smg'],         // Rifle slot
+  4: ['pump_shotgun', 'auto_shotgun'],  // Shotgun slot
+  5: ['bolt_sniper', 'semi_sniper'],   // Sniper slot
+};
 
 // ── DOM Elements ────────────────────────────────────────────
 const debugInfo = document.getElementById('debug-info');
@@ -357,14 +377,32 @@ function setupInputHandlers() {
           quickSwitchWeapon();
         }
       }
-      // Tahap 17: B key to drop current weapon
+      // Tahap 17: B key to drop current weapon (with cooldown to prevent rapid drops)
       else if (key === 'b') {
-        dropCurrentWeapon();
+        if (!lastDropTime || (performance.now() / 1000 - lastDropTime) > 0.5) {
+          lastDropTime = performance.now() / 1000;
+          dropCurrentWeapon();
+        }
       }
-      // Tahap 18: I key to toggle armor inventory
-      else if (key === 'i') {
-        toggleArmorInventory();
-      }
+    }
+
+    // Tahap 18: I key to toggle armor inventory — works BOTH locked and unlocked
+    // This is outside the isPointerLocked check so the user can close the inventory
+    if (key === 'i') {
+      e.preventDefault(); // Prevent browser default behavior (e.g., Firefox page info)
+      toggleArmorInventory();
+    }
+
+    // Tahap 19: Damage test keys (F5/F6/F7) — for testing damage system
+    if (key === 'f5') {
+      // Test: Take 20 damage
+      applyDamage(20, 'test_normal', false);
+    } else if (key === 'f6') {
+      // Test: Take 20 headshot damage (x2 = 40)
+      applyDamage(20, 'test_headshot', true);
+    } else if (key === 'f7') {
+      // Test: Kill self (100 damage)
+      applyDamage(100, 'test_kill', false);
     }
   }, true); // capture phase
 
@@ -785,6 +823,7 @@ async function loadItemData() {
     updateWeaponHud();
     updateGrenadeHud();
     updateArmorHud();  // Tahap 18: Initialize armor HUD
+    updateHPBar();     // Tahap 19: Initialize HP bar
 
     console.log('item.json loaded successfully:', countWeapons() + ' weapons,',
                 countArmor() + ' armor items');
@@ -796,6 +835,7 @@ async function loadItemData() {
     updateWeaponHud();
     updateGrenadeHud();
     updateArmorHud();  // Tahap 18: Initialize armor HUD
+    updateHPBar();     // Tahap 19: Initialize HP bar
     console.log('item.json fallback loaded:', countWeapons() + ' weapons,',
                 countArmor() + ' armor items');
   }
@@ -874,6 +914,18 @@ function isMeleeWeapon(weaponData) {
 // switchWeaponSlot is now defined in Tahap 17 section with animation support
 
 // ── Tahap 09: Update Weapon HUD ────────────────────────────
+// v7: Update weapon visibility based on current slot
+function updateWeaponVisibility() {
+  const slot = weaponInventory.currentSlot;
+  if (fistGroup) fistGroup.visible = (slot === 0);
+  if (leftFistGroup) leftFistGroup.visible = (slot === 0);
+  if (knifeGroup) knifeGroup.visible = (slot === 1);
+  if (pistolGroup) pistolGroup.visible = (slot === 2);
+  if (rifleGroup) rifleGroup.visible = (slot === 3);
+  if (shotgunGroup) shotgunGroup.visible = (slot === 4);
+  if (sniperGroup) sniperGroup.visible = (slot === 5);
+}
+
 function updateWeaponHud() {
   if (!weaponNameEl || !weaponAmmoEl) return;
 
@@ -1795,10 +1847,8 @@ function detonateGrenade(grenade) {
     if (playerDist < damageRadius) {
       const damageFactor = 1.0 - (playerDist / damageRadius);
       const damage = Math.round(maxDamage * damageFactor);
-      console.log('Frag grenade damage to player: ' + damage + ' (distance: ' + playerDist.toFixed(1) + ')');
-      // In a full game, this would reduce player HP
-      // For now, show screen flash effect
-      showDamageFlash(damageFactor);
+      // Tahap 19: Apply actual damage to player
+      applyDamage(damage, 'frag_grenade', false);
     }
   } else if (type === 'smoke') {
     // ── Smoke Grenade: Create smoke cloud ──
@@ -1916,61 +1966,59 @@ function createExplosionEffect(position) {
 
 // ── Damage Flash Effect ────────────────────────────────────
 function showDamageFlash(intensity) {
-  const flashDiv = document.createElement('div');
-  flashDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;' +
-    'background:rgba(255,50,0,' + (intensity * 0.4) + ');z-index:30;pointer-events:none;' +
-    'transition:opacity 0.5s ease;';
-  document.body.appendChild(flashDiv);
-
-  setTimeout(() => {
-    flashDiv.style.opacity = '0';
-    setTimeout(() => {
-      if (flashDiv.parentNode) flashDiv.parentNode.removeChild(flashDiv);
-    }, 500);
-  }, 100);
+  // Tahap 19: Use the dedicated damage-flash element instead of creating DOM elements
+  triggerDamageFlash();
 }
 
-// ── Smoke Cloud (v5: Dense smoke from outside, hazy from inside, no lag) ─────────
+// ── Smoke Cloud (v7: Ultra-optimized — fewer sprites, no per-particle updates, no lag) ─────
 function createSmokeCloud(position, grenadeData) {
-  // v5: Complete rewrite of smoke behavior
-  // In real FPS games (CS:GO, Valorant, etc.), smoke grenades work like this:
-  //   - FROM OUTSIDE: You CANNOT see through the smoke — it's a solid wall of white/grey
-  //   - FROM INSIDE: You can see a little bit (hazy/foggy) but not clearly
-  //   - The smoke cloud is a defined volume — it has edges
-  //
-  // Implementation:
-  //   - 40 sprites with HIGH opacity (0.65-0.85) = blocks vision from outside
-  //   - CSS overlay is LIGHTER (0.25-0.45) when inside = you can still see a bit
-  //   - Sprites are layered: inner = more opaque, outer = less opaque
-  //   - Shared texture for all sprites (one draw call per sprite type)
+  // v7: Maximum performance optimization while keeping visual structure
+  // Key optimizations:
+  //   - 12 sprites (reduced from 20) — large sprites still cover the area
+  //   - Only 2 shared materials (core + edge) — 2 draw calls total
+  //   - NO per-particle opacity updates — opacity is set on shared material only
+  //   - NO per-particle position changes — sprites are static once placed
+  //   - CSS overlay handles "inside smoke" visibility (cheap, no 3D overhead)
+  //   - Throttled fade updates (every 200ms instead of every frame)
   const radius = CONFIG.smokeRadius || 7;
   const duration = grenadeData.duration || CONFIG.smokeGrenadeDuration;
-  const particleCount = CONFIG.smokeParticleCount || 40;
+  const particleCount = CONFIG.smokeParticleCount || 12;
 
   // Create a single shared canvas texture for all smoke sprites
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
+  canvas.width = 32;  // v7: Reduced from 64 — even less texture memory, still looks fine
+  canvas.height = 32;
   const ctx = canvas.getContext('2d');
-  // Draw a soft-but-dense radial gradient (smoke puff shape)
-  // Key: the center is very opaque (hard to see through), edges fade
-  const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
   grad.addColorStop(0, 'rgba(220,220,220,1.0)');
-  grad.addColorStop(0.2, 'rgba(200,200,200,0.95)');
-  grad.addColorStop(0.4, 'rgba(185,185,185,0.85)');
-  grad.addColorStop(0.6, 'rgba(170,170,170,0.65)');
-  grad.addColorStop(0.8, 'rgba(155,155,155,0.35)');
-  grad.addColorStop(1.0, 'rgba(140,140,140,0.0)');
+  grad.addColorStop(0.4, 'rgba(200,200,200,0.8)');
+  grad.addColorStop(0.7, 'rgba(180,180,180,0.4)');
+  grad.addColorStop(1.0, 'rgba(160,160,160,0.0)');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillRect(0, 0, 32, 32);
   const smokeTexture = new THREE.CanvasTexture(canvas);
 
-  const smokeParticles = [];
+  // v7: Only TWO shared materials — one for core, one for edge
+  // This means only 2 draw calls regardless of particle count
+  const coreMat = new THREE.SpriteMaterial({
+    map: smokeTexture,
+    color: 0xcccccc,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: true,
+  });
+  const edgeMat = new THREE.SpriteMaterial({
+    map: smokeTexture,
+    color: 0xbbbbbb,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    fog: true,
+  });
 
-  // Layer 1: Core smoke (inner 50% of radius) — very opaque, blocks vision
+  const smokeParticles = [];
   const coreCount = Math.floor(particleCount * 0.6);
-  // Layer 2: Edge smoke (outer 50% of radius) — less opaque, creates soft edges
-  const edgeCount = particleCount - coreCount;
 
   for (let i = 0; i < particleCount; i++) {
     const isCore = i < coreCount;
@@ -1981,20 +2029,11 @@ function createSmokeCloud(position, grenadeData) {
       ? Math.random() * 3.5 + 0.3
       : Math.random() * 2.5 + 0.2;
 
-    const spriteMat = new THREE.SpriteMaterial({
-      map: smokeTexture,
-      color: isCore ? 0xcccccc : 0xbbbbbb,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      fog: true,
-    });
-
-    const sprite = new THREE.Sprite(spriteMat);
-    // Core sprites are larger, edge sprites are smaller
+    // v7: Use shared material — ALL core sprites share one material, ALL edge share another
+    const sprite = new THREE.Sprite(isCore ? coreMat : edgeMat);
     const size = isCore
-      ? 4.0 + Math.random() * 3.0
-      : 3.0 + Math.random() * 2.5;
+      ? 6.0 + Math.random() * 4.0  // v7: Even larger sprites to cover more area with fewer objects
+      : 5.0 + Math.random() * 3.5;
     sprite.scale.set(size, size, 1);
     sprite.position.set(
       position.x + Math.cos(angle) * dist,
@@ -2003,68 +2042,72 @@ function createSmokeCloud(position, grenadeData) {
     );
 
     scene.add(sprite);
-    // Core smoke: HIGH opacity (0.7-0.85) = blocks vision from outside
-    // Edge smoke: lower opacity (0.4-0.55) = soft edges
-    const baseOpacity = isCore
-      ? 0.7 + Math.random() * 0.15
-      : 0.4 + Math.random() * 0.15;
+    // v7: No per-particle opacity tracking — opacity is set on shared material
     smokeParticles.push({
       mesh: sprite,
-      targetOpacity: baseOpacity,
-      fadeIn: true,
-      fadeSpeed: 0.5 + Math.random() * 0.2,
-      distFromCenter: dist / radius,
       isCore: isCore,
     });
   }
 
   const smokeCloud = {
     particles: smokeParticles,
+    coreMat: coreMat,
+    edgeMat: edgeMat,
+    texture: smokeTexture,
     startTime: performance.now() / 1000,
     duration: duration,
     position: position,
     radius: radius,
+    lastFadeUpdate: 0, // v7: Throttle fade updates to every 200ms
   };
 
   activeSmokeClouds.push(smokeCloud);
 }
 
 function updateSmokeClouds(deltaTime) {
+  const now = performance.now() / 1000;
+
   for (let i = activeSmokeClouds.length - 1; i >= 0; i--) {
     const cloud = activeSmokeClouds[i];
-    const elapsed = performance.now() / 1000 - cloud.startTime;
+    const elapsed = now - cloud.startTime;
     const remaining = cloud.duration - elapsed;
 
     if (remaining <= 0) {
-      // Remove smoke cloud — dispose sprites
+      // Remove smoke cloud — dispose sprites and materials
       for (const p of cloud.particles) {
         scene.remove(p.mesh);
-        if (p.mesh.material.map) p.mesh.material.map.dispose();
-        p.mesh.material.dispose();
       }
+      // v7: Dispose shared materials and texture once
+      if (cloud.coreMat) cloud.coreMat.dispose();
+      if (cloud.edgeMat) cloud.edgeMat.dispose();
+      if (cloud.texture) cloud.texture.dispose();
       activeSmokeClouds.splice(i, 1);
       continue;
     }
 
-    // v4: Optimized — only fade in/out, no position/scale updates
+    // v7: Throttle fade updates — only update every ~200ms instead of every frame
+    // This dramatically reduces material.opacity writes (from 60/s to 5/s)
+    if (now - cloud.lastFadeUpdate < 0.2) continue;
+    cloud.lastFadeUpdate = now;
+
     const fadeStartTime = cloud.duration * 0.6;
 
-    for (const p of cloud.particles) {
-      // Fade in
-      if (p.fadeIn) {
-        p.mesh.material.opacity = Math.min(p.mesh.material.opacity + deltaTime * p.fadeSpeed, p.targetOpacity);
-        if (p.mesh.material.opacity >= p.targetOpacity) p.fadeIn = false;
-      }
+    // Determine fade-in state
+    const fadeInFactor = elapsed < 2.0 ? elapsed / 2.0 : 1.0;
 
-      // Outside-in fading
-      if (elapsed > fadeStartTime) {
-        const fadeProgress = (elapsed - fadeStartTime) / (cloud.duration - fadeStartTime);
-        const particleFadeThreshold = 1 - p.distFromCenter;
-        if (fadeProgress > particleFadeThreshold) {
-          const particleFadeProgress = (fadeProgress - particleFadeThreshold) / (1 - particleFadeThreshold + 0.001);
-          p.mesh.material.opacity = p.targetOpacity * (1 - particleFadeProgress);
-        }
-      }
+    // Determine fade-out state
+    let fadeOutFactor = 1.0;
+    if (elapsed > fadeStartTime) {
+      const fadeProgress = (elapsed - fadeStartTime) / (cloud.duration - fadeStartTime);
+      fadeOutFactor = 1.0 - fadeProgress;
+    }
+
+    // v7: Set shared material opacity for core and edge (only 2 writes per cloud)
+    if (cloud.coreMat) {
+      cloud.coreMat.opacity = 0.75 * fadeInFactor * fadeOutFactor;
+    }
+    if (cloud.edgeMat) {
+      cloud.edgeMat.opacity = 0.45 * fadeInFactor * fadeOutFactor;
     }
   }
 }
@@ -3189,10 +3232,12 @@ function updatePistol(deltaTime) {
 
 function cyclePistolVariant() {
   // Tahap 14: Sub-switch between pistol variants using Q key
-  const cycle = CONFIG.pistolSwitchCycle;
-  const currentIdx = cycle.indexOf(pistolCurrentVariant);
-  const nextIdx = (currentIdx + 1) % cycle.length;
-  const nextVariant = cycle[nextIdx];
+  // v6: Only cycle through owned variants
+  const owned = ownedVariants[2] || [];
+  if (owned.length <= 1) return; // No other variants to switch to
+  const currentIdx = owned.indexOf(pistolCurrentVariant);
+  const nextIdx = (currentIdx + 1) % owned.length;
+  const nextVariant = owned[nextIdx];
 
   // Update the inventory slot
   weaponInventory.slots[2] = nextVariant;
@@ -3633,10 +3678,12 @@ function updateShotgun(deltaTime) {
 
 function cycleShotgunVariant() {
   // Tahap 15: Sub-switch between shotgun variants using Q key
-  const cycle = CONFIG.shotgunSwitchCycle;
-  const currentIdx = cycle.indexOf(shotgunCurrentVariant);
-  const nextIdx = (currentIdx + 1) % cycle.length;
-  const nextVariant = cycle[nextIdx];
+  // v6: Only cycle through owned variants
+  const owned = ownedVariants[4] || [];
+  if (owned.length <= 1) return;
+  const currentIdx = owned.indexOf(shotgunCurrentVariant);
+  const nextIdx = (currentIdx + 1) % owned.length;
+  const nextVariant = owned[nextIdx];
 
   // Update the inventory slot
   weaponInventory.slots[4] = nextVariant;
@@ -4746,10 +4793,12 @@ function updateRifle(deltaTime) {
 }
 
 function cycleRifleVariant() {
-  const cycle = CONFIG.rifleSwitchCycle;
-  const currentIdx = cycle.indexOf(rifleCurrentVariant);
-  const nextIdx = (currentIdx + 1) % cycle.length;
-  const nextVariant = cycle[nextIdx];
+  // v6: Only cycle through owned variants
+  const owned = ownedVariants[3] || [];
+  if (owned.length <= 1) return;
+  const currentIdx = owned.indexOf(rifleCurrentVariant);
+  const nextIdx = (currentIdx + 1) % owned.length;
+  const nextVariant = owned[nextIdx];
 
   // Update the inventory slot
   weaponInventory.slots[3] = nextVariant;
@@ -4772,10 +4821,12 @@ function cycleRifleVariant() {
 
 function cycleSniperVariant() {
   // Tahap 16: Sub-switch between sniper variants using Q key
-  const cycle = CONFIG.sniperSwitchCycle;
-  const currentIdx = cycle.indexOf(sniperCurrentVariant);
-  const nextIdx = (currentIdx + 1) % cycle.length;
-  const nextVariant = cycle[nextIdx];
+  // v6: Only cycle through owned variants
+  const owned = ownedVariants[5] || [];
+  if (owned.length <= 1) return;
+  const currentIdx = owned.indexOf(sniperCurrentVariant);
+  const nextIdx = (currentIdx + 1) % owned.length;
+  const nextVariant = owned[nextIdx];
 
   // Update the inventory slot
   weaponInventory.slots[5] = nextVariant;
@@ -4808,11 +4859,38 @@ function cycleSniperVariant() {
 
 function switchWeaponSlot(newSlot) {
   if (newSlot < 0 || newSlot >= weaponInventory.slots.length) return;
-  if (newSlot === weaponInventory.currentSlot) return;
   if (isSwitchingWeapon) return;
+  // v7: Allow switching to same slot if the variant changed (e.g., after dropping a weapon)
+  // But skip if the slot is truly the same and we're already on it
+  if (newSlot === weaponInventory.currentSlot) {
+    // If we're already on this slot and it has a weapon, just update HUD
+    if (weaponInventory.slots[newSlot] !== null) return;
+    // Slot is empty but we're on it — try to find a variant
+  }
 
-  // Check if slot has a weapon (slot 0 = fist always available)
-  if (weaponInventory.slots[newSlot] === null && newSlot !== 0) return;
+  // v6: If slot is null but player owns variants, auto-assign first available
+  if (weaponInventory.slots[newSlot] === null && newSlot !== 0 && newSlot !== 1) {
+    if (ownedVariants[newSlot] && ownedVariants[newSlot].length > 0) {
+      const variant = ownedVariants[newSlot][0];
+      weaponInventory.slots[newSlot] = variant;
+      // Update variant tracker
+      if (newSlot === 2) { pistolCurrentVariant = variant; buildPistolModel(variant); }
+      else if (newSlot === 3) { rifleCurrentVariant = variant; buildRifleModel(variant); }
+      else if (newSlot === 4) { shotgunCurrentVariant = variant; buildShotgunModel(variant); }
+      else if (newSlot === 5) { sniperCurrentVariant = variant; buildSniperModel(variant); }
+      // Initialize ammo
+      if (!weaponInventory.ammo[variant]) {
+        const wData = getWeaponById(variant);
+        if (wData && wData.magazine) {
+          weaponInventory.ammo[variant] = wData.magazine;
+          weaponInventory.reserveAmmo[variant] = wData.magazine * 3;
+        }
+      }
+    }
+  }
+
+  // Check if slot has a weapon (slot 0 = fist always available, slot 1 = knife always available)
+  if (weaponInventory.slots[newSlot] === null && newSlot !== 0 && newSlot !== 1) return;
 
   // Unscope if switching from sniper
   if (isSniperScoping) {
@@ -4868,6 +4946,7 @@ function updateWeaponSwitch(deltaTime) {
       // Animation complete
       if (weaponInventory.currentSlot !== switchTargetSlot) {
         weaponInventory.currentSlot = switchTargetSlot;
+        updateWeaponVisibility();
         updateWeaponHud();
       }
       isSwitchingWeapon = false;
@@ -4889,7 +4968,8 @@ function dropCurrentWeapon() {
   // Can't drop knife (slot 1 is always available)
   if (weaponInventory.currentSlot === 1) return;
 
-  const slotId = weaponInventory.slots[weaponInventory.currentSlot];
+  const slotIdx = weaponInventory.currentSlot;
+  const slotId = weaponInventory.slots[slotIdx];
   if (!slotId) return;
 
   const weapon = getWeaponById(slotId);
@@ -4917,23 +4997,56 @@ function dropCurrentWeapon() {
 
   // Store the dropped weapon info with dropTime for pickup cooldown
   const now = performance.now() / 1000;
+  const savedAmmo = weaponInventory.ammo[slotId] || 0;
+  const savedReserve = weaponInventory.reserveAmmo[slotId] || 0;
   droppedWeapons.push({
     mesh: pickupMesh,
     weaponId: slotId,
-    slot: weaponInventory.currentSlot,
-    ammo: weaponInventory.ammo[slotId] || 0,
-    reserve: weaponInventory.reserveAmmo[slotId] || 0,
-    dropTime: now,  // v5: Track when the weapon was dropped
+    slot: slotIdx,
+    ammo: savedAmmo,
+    reserve: savedReserve,
+    dropTime: now,
   });
 
-  // Remove from inventory
-  weaponInventory.slots[weaponInventory.currentSlot] = null;
+  // v7: Remove ONLY the specific variant from ownedVariants
+  if (ownedVariants[slotIdx]) {
+    const vIdx = ownedVariants[slotIdx].indexOf(slotId);
+    if (vIdx !== -1) {
+      ownedVariants[slotIdx].splice(vIdx, 1);
+    }
+  }
+
+  // Remove ammo for this specific variant only
   delete weaponInventory.ammo[slotId];
   delete weaponInventory.reserveAmmo[slotId];
 
-  // Switch to fist
-  switchWeaponSlot(0);
-  updateWeaponHud();
+  // v7: If there are other variants owned in this slot, switch to the next one
+  if (ownedVariants[slotIdx] && ownedVariants[slotIdx].length > 0) {
+    const nextVariant = ownedVariants[slotIdx][0];
+    weaponInventory.slots[slotIdx] = nextVariant;
+    // Update the current variant tracker and rebuild the 3D model
+    if (slotIdx === 2) { pistolCurrentVariant = nextVariant; buildPistolModel(nextVariant); }
+    else if (slotIdx === 3) { rifleCurrentVariant = nextVariant; buildRifleModel(nextVariant); }
+    else if (slotIdx === 4) { shotgunCurrentVariant = nextVariant; buildShotgunModel(nextVariant); }
+    else if (slotIdx === 5) { sniperCurrentVariant = nextVariant; buildSniperModel(nextVariant); }
+    // Initialize ammo for new variant if not already done
+    if (!weaponInventory.ammo[nextVariant]) {
+      const wData = getWeaponById(nextVariant);
+      if (wData && wData.magazine) {
+        weaponInventory.ammo[nextVariant] = wData.magazine;
+        weaponInventory.reserveAmmo[nextVariant] = wData.magazine * 3;
+      }
+    }
+    // We're still on the same slot, just different variant — force update weapon visibility
+    updateWeaponVisibility();
+    updateWeaponHud();
+  } else {
+    // No more variants in this slot — empty the slot
+    weaponInventory.slots[slotIdx] = null;
+    // Switch to fist
+    switchWeaponSlot(0);
+    updateWeaponHud();
+  }
 }
 
 function checkWeaponPickups() {
@@ -4956,9 +5069,26 @@ function checkWeaponPickups() {
     if (dist < pickupRadius) {
       // Pick up the weapon
       const targetSlot = dw.slot;
-      // Only pick up if slot is empty or same weapon
-      if (weaponInventory.slots[targetSlot] === null || weaponInventory.slots[targetSlot] === dw.weaponId) {
-        weaponInventory.slots[targetSlot] = dw.weaponId;
+      // Only pick up if slot is empty, same weapon, or same slot type with room
+      // v7: Allow pickup if slot is empty OR same weapon type slot
+      // (e.g., picking up a revolver when you have a glock — adds it back to ownedVariants)
+      const slotWeapon = weaponInventory.slots[targetSlot];
+      const canPickup = slotWeapon === null || slotWeapon === dw.weaponId ||
+        (ownedVariants[targetSlot] && !ownedVariants[targetSlot].includes(dw.weaponId));
+      if (canPickup) {
+        // Add the variant back to ownedVariants first
+        if (ownedVariants[targetSlot] && !ownedVariants[targetSlot].includes(dw.weaponId)) {
+          ownedVariants[targetSlot].push(dw.weaponId);
+        }
+        // If slot is empty, set it to this weapon
+        if (slotWeapon === null) {
+          weaponInventory.slots[targetSlot] = dw.weaponId;
+          // Update variant tracker
+          if (targetSlot === 2) { pistolCurrentVariant = dw.weaponId; buildPistolModel(dw.weaponId); }
+          else if (targetSlot === 3) { rifleCurrentVariant = dw.weaponId; buildRifleModel(dw.weaponId); }
+          else if (targetSlot === 4) { shotgunCurrentVariant = dw.weaponId; buildShotgunModel(dw.weaponId); }
+          else if (targetSlot === 5) { sniperCurrentVariant = dw.weaponId; buildSniperModel(dw.weaponId); }
+        }
         weaponInventory.ammo[dw.weaponId] = dw.ammo;
         weaponInventory.reserveAmmo[dw.weaponId] = dw.reserve;
 
@@ -4968,7 +5098,8 @@ function checkWeaponPickups() {
         dw.mesh.material.dispose();
         droppedWeapons.splice(i, 1);
 
-        // Update HUD
+        // Update weapon visibility and HUD
+        updateWeaponVisibility();
         updateWeaponHud();
 
         // Show pickup notification
@@ -5043,18 +5174,20 @@ function equipArmor(armorItem) {
   armorInventory[slot] = armorItem;
   armorSpeedBonus = getArmorSpeedModifier();
   updateArmorHud();
-  updateArmorInventoryScreen();
+  // Refresh inventory screen if it's open
+  if (isInventoryOpen) updateArmorInventoryScreen();
 }
 
 function unequipArmor(slot) {
   if (!armorInventory[slot]) return;
 
   const item = armorInventory[slot];
+  showPickupNotification('Unequipped: ' + item.name);
   armorInventory[slot] = null;
   armorSpeedBonus = getArmorSpeedModifier();
-  showPickupNotification('Unequipped: ' + item.name);
   updateArmorHud();
-  updateArmorInventoryScreen();
+  // Refresh inventory screen if it's open
+  if (isInventoryOpen) updateArmorInventoryScreen();
 }
 
 function updateArmorHud() {
@@ -5092,9 +5225,12 @@ function toggleArmorInventory() {
   } else {
     invEl.style.display = 'none';
     // Re-lock pointer when closing inventory
-    if (renderer && renderer.domElement) {
-      renderer.domElement.requestPointerLock();
-    }
+    // Use a small delay to ensure the UI is fully hidden before re-locking
+    setTimeout(() => {
+      if (!isInventoryOpen && renderer && renderer.domElement) {
+        renderer.domElement.requestPointerLock();
+      }
+    }, 50);
   }
 }
 
@@ -5148,6 +5284,199 @@ function updateArmorInventoryScreen() {
     speedBonusEl.textContent = (speed >= 0 ? '+' : '') + speed.toFixed(1);
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+//  TAHAP 19: HP & DAMAGE CALCULATION
+// ══════════════════════════════════════════════════════════════
+
+// ── Damage Functions ────────────────────────────────────────
+function applyDamage(rawDamage, source, isHeadshot) {
+  if (isPlayerDead) return;
+
+  // Apply headshot multiplier
+  let damage = rawDamage;
+  if (isHeadshot) {
+    damage = rawDamage * 2;
+  }
+
+  // Apply armor defense reduction
+  const totalDefense = getTotalDefense();
+  let effectiveDamage = damage - totalDefense;
+
+  // Minimum effective damage is always 1
+  if (effectiveDamage < 1) effectiveDamage = 1;
+
+  // Reduce HP
+  playerHP -= effectiveDamage;
+  lastDamageSource = source || 'unknown';
+
+  // Show damage flash
+  triggerDamageFlash();
+
+  // Show hit marker
+  if (hitMarkerEl) {
+    hitMarkerEl.classList.add('active');
+    setTimeout(() => { if (hitMarkerEl) hitMarkerEl.classList.remove('active'); }, 200);
+  }
+
+  // Update HP bar
+  updateHPBar();
+
+  // Check for death
+  if (playerHP <= 0) {
+    playerHP = 0;
+    playerDeath();
+  }
+
+  console.log('Damage: ' + rawDamage + (isHeadshot ? ' (HEADSHOT x2)' : '') +
+    ' -> Effective: ' + effectiveDamage + ' (DEF: ' + totalDefense + ')' +
+    ' | HP: ' + playerHP + ' | Source: ' + lastDamageSource);
+}
+
+function triggerDamageFlash() {
+  damageFlashTimer = 0.2;
+  const flashEl = document.getElementById('damage-flash');
+  if (flashEl) {
+    flashEl.classList.add('active');
+    setTimeout(() => { flashEl.classList.remove('active'); }, 200);
+  }
+}
+
+function updateHPBar() {
+  const hpBar = document.getElementById('hp-bar');
+  const hpFill = document.getElementById('hp-fill');
+  const hpText = document.getElementById('hp-text');
+
+  if (!hpFill || !hpText) return;
+
+  const hpPercent = Math.max(0, Math.min(100, playerHP));
+  hpFill.style.width = hpPercent + '%';
+  hpText.textContent = Math.round(playerHP);
+
+  // Color changes based on HP level
+  if (hpPercent > 60) {
+    hpFill.style.background = '#44ff44'; // Green
+    if (hpBar) hpBar.classList.remove('low');
+  } else if (hpPercent > 30) {
+    hpFill.style.background = '#ffaa00'; // Yellow/Orange
+    if (hpBar) hpBar.classList.remove('low');
+  } else {
+    hpFill.style.background = '#ff3300'; // Red
+    if (hpBar) hpBar.classList.add('low');
+  }
+}
+
+function playerDeath() {
+  isPlayerDead = true;
+  deathTime = performance.now() / 1000;
+
+  // Show death screen
+  const deathScreen = document.getElementById('death-screen');
+  if (deathScreen) {
+    deathScreen.style.display = 'flex';
+  }
+
+  // Release pointer lock
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
+
+  console.log('PLAYER DIED — Respawning in ' + DEATH_RESPAWN_TIME + 's');
+}
+
+function respawnPlayer() {
+  isPlayerDead = false;
+  playerHP = playerMaxHP;
+
+  // Reset position to spawn point
+  camera.position.set(SPAWN_POINT.x, SPAWN_POINT.y, SPAWN_POINT.z);
+  velocityY = 0;
+  velocity.set(0, 0, 0);
+  isGrounded = true;
+  yaw = 0;
+  pitch = 0;
+
+  // Reset stance to standing
+  if (stance !== 'standing') {
+    stance = 'standing';
+    targetCameraY = CONFIG.standHeight;
+  }
+
+  // Reset sprint and stamina
+  isSprinting = false;
+  isExhausted = false;
+  exhaustionTimer = 0;
+  stamina = CONFIG.staminaMax;
+
+  // Reset weapon to fist
+  weaponInventory.currentSlot = 0;
+  updateWeaponVisibility();
+  updateWeaponHud();
+
+  // Hide death screen
+  const deathScreen = document.getElementById('death-screen');
+  if (deathScreen) {
+    deathScreen.style.display = 'none';
+  }
+
+  // Update HP bar
+  updateHPBar();
+
+  // Re-lock pointer
+  if (renderer && renderer.domElement) {
+    renderer.domElement.requestPointerLock();
+  }
+
+  console.log('PLAYER RESPAWNED');
+}
+
+function updateDeathAndRespawn(deltaTime) {
+  if (!isPlayerDead) return;
+
+  const elapsed = performance.now() / 1000 - deathTime;
+  const remaining = Math.max(0, DEATH_RESPAWN_TIME - elapsed);
+
+  // Update respawn timer display
+  const timerEl = document.getElementById('respawn-timer');
+  if (timerEl) {
+    timerEl.textContent = Math.ceil(remaining);
+  }
+
+  // Respawn when timer expires
+  if (remaining <= 0) {
+    respawnPlayer();
+  }
+}
+
+// ── Fall Damage ─────────────────────────────────────────────
+let lastGroundY = CONFIG.groundLevel;
+let wasAirborne = false;
+
+function updateFallDamage() {
+  // Track fall damage: if player was airborne and lands from a height > 3 units
+  if (!isGrounded) {
+    wasAirborne = true;
+    if (camera.position.y > lastGroundY) {
+      lastGroundY = camera.position.y;
+    }
+  } else if (wasAirborne) {
+    // Just landed
+    const fallDistance = lastGroundY - camera.position.y;
+    if (fallDistance > 3.0) {
+      // Fall damage: 5 damage per unit above 3
+      const fallDamage = (fallDistance - 3.0) * 10;
+      applyDamage(fallDamage, 'fall', false);
+      console.log('Fall damage! Distance: ' + fallDistance.toFixed(1) + 'u, Damage: ' + fallDamage.toFixed(1));
+    }
+    wasAirborne = false;
+    lastGroundY = camera.position.y;
+  } else {
+    lastGroundY = camera.position.y;
+  }
+}
+
+// ── Self-damage test command (F5 key for testing) ──────────
+// Press F5 to test damage, F6 to test headshot, F7 to kill self
 
 // ── Tahap 08: Arena Map Builder ────────────────────────────
 function buildArenaMap() {
@@ -5709,15 +6038,23 @@ function updateJump(deltaTime) {
 }
 
 // ── Render Loop ─────────────────────────────────────────────
-// ── Tahap 11 FIX: Screen-space smoke overlay (v5 — correct behavior) ────────
-// In real FPS games (CS:GO, Valorant):
-//   - FROM OUTSIDE: The 3D sprites block your vision (they're opaque enough)
-//   - FROM INSIDE: A light fog overlay makes it hard to see but not impossible
-//   - The key insight: the CSS overlay should be LIGHTER (0.3-0.5) not 0.95
-//     because the 3D sprites already handle vision blocking from outside
+// ── Tahap 11 FIX: Screen-space smoke overlay (v6 — optimized, throttled) ────────
 let smokeOverlayTime = 0;
+let lastSmokeOverlayUpdate = 0;
 function updateSmokeOverlay() {
   if (!smokeOverlayEl) return;
+
+  const now = performance.now() / 1000;
+
+  // v7: Throttle DOM updates to every ~300ms instead of every frame
+  // DOM style changes are expensive — reducing frequency drastically improves FPS
+  if (now - lastSmokeOverlayUpdate < 0.3) {
+    // If overlay is already hidden, no need to update
+    if (smokeOverlayEl.style.display === 'none') return;
+    // If overlay is visible, keep it visible but skip expensive style updates
+    return;
+  }
+  lastSmokeOverlayUpdate = now;
 
   let maxOpacity = 0;
   let closestDist = 999;
@@ -5733,19 +6070,14 @@ function updateSmokeOverlay() {
       const distRatio = dist2D / cloud.radius;
       const heightRatio = heightDiff / 3.0;
 
-      // v5: Inside smoke is hazy but NOT pitch black
-      // At center: 0.40-0.50 opacity (hazy, can barely see shapes)
-      // At edge: 0.15-0.25 opacity (slight fog)
-      // This matches real FPS games where you can see vague shapes inside smoke
       const opacity = (0.5 - distRatio * 0.25) * (1 - heightRatio * 0.15);
 
-      const elapsed = performance.now() / 1000 - cloud.startTime;
+      const elapsed = now - cloud.startTime;
       const remaining = cloud.duration - elapsed;
       const fadeFactor = remaining < cloud.duration * 0.3
         ? remaining / (cloud.duration * 0.3)
         : 1.0;
 
-      // Fade-in during first 2 seconds (smoke filling the volume)
       const fadeInFactor = elapsed < 2.0 ? elapsed / 2.0 : 1.0;
 
       const finalOpacity = opacity * fadeFactor * fadeInFactor;
@@ -5754,10 +6086,9 @@ function updateSmokeOverlay() {
     }
   }
 
-  // Apply the overlay with animated noise background
+  // Apply the overlay
   if (maxOpacity > 0.01) {
-    smokeOverlayTime += 0.016;
-    // Animate the background position for a "swirling smoke" effect
+    smokeOverlayTime += 0.15;
     const offsetX = Math.sin(smokeOverlayTime * 0.5) * 30;
     const offsetY = Math.cos(smokeOverlayTime * 0.3) * 20;
     smokeOverlayEl.style.opacity = maxOpacity.toString();
@@ -5772,23 +6103,28 @@ function animate() {
   requestAnimationFrame(animate);
   const deltaTime = clock.getDelta();
 
-  updateCrouch(deltaTime);
-  updateSprint(deltaTime);
-  updateMovement(deltaTime);
-  updateJump(deltaTime);
-  updateShooting(deltaTime);  // Tahap 10
-  updateGrenades(deltaTime);  // Tahap 11
-  updateSmokeClouds(deltaTime); // Tahap 11
-  updateFist(deltaTime);     // Tahap 12
-  updateKnife(deltaTime);    // Tahap 13
-  updatePistol(deltaTime);   // Tahap 14
-  updateShotgun(deltaTime);  // Tahap 15
-  updateSniper(deltaTime);   // Tahap 16
-  updateRifle(deltaTime);    // Tahap 16+: Rifle/SMG
-  updateWeaponSwitch(deltaTime); // Tahap 17: Weapon switch animation
-  updateDroppedWeapons(deltaTime); // Tahap 17: Dropped weapon bob
-  checkWeaponPickups();          // Tahap 17: Pickup detection
+  // Tahap 19: Skip gameplay updates if dead (but keep rendering)
+  if (!isPlayerDead) {
+    updateCrouch(deltaTime);
+    updateSprint(deltaTime);
+    updateMovement(deltaTime);
+    updateJump(deltaTime);
+    updateShooting(deltaTime);  // Tahap 10
+    updateGrenades(deltaTime);  // Tahap 11
+    updateFist(deltaTime);     // Tahap 12
+    updateKnife(deltaTime);    // Tahap 13
+    updatePistol(deltaTime);   // Tahap 14
+    updateShotgun(deltaTime);  // Tahap 15
+    updateSniper(deltaTime);   // Tahap 16
+    updateRifle(deltaTime);    // Tahap 16+: Rifle/SMG
+    updateWeaponSwitch(deltaTime); // Tahap 17: Weapon switch animation
+    updateDroppedWeapons(deltaTime); // Tahap 17: Dropped weapon bob
+    checkWeaponPickups();          // Tahap 17: Pickup detection
+    updateFallDamage();            // Tahap 19: Fall damage check
+  }
+  updateSmokeClouds(deltaTime); // Tahap 11: Always update (even when dead, for visual)
   updateSmokeOverlay();      // Tahap 11 fix: screen-space smoke overlay
+  updateDeathAndRespawn(deltaTime); // Tahap 19: Death/respawn timer
   updateCrosshair();
   updateDebugInfo(deltaTime);
 
@@ -5864,8 +6200,11 @@ function updateDebugInfo(deltaTime) {
   // Tahap 18: Armor info
   const armorInfo = ' | DEF: ' + getTotalDefense() + ' SPD: ' + (armorSpeedBonus >= 0 ? '+' : '') + armorSpeedBonus.toFixed(1);
 
+  // Tahap 19: HP info
+  const hpInfo = ' | HP: ' + Math.round(playerHP) + '/' + playerMaxHP + (isPlayerDead ? ' [DEAD]' : '');
+
   debugInfo.innerHTML =
-    'TAHAP 18 — Armor System' + armorInfo + '<br>' +
+    'TAHAP 19 — HP & Damage' + armorInfo + hpInfo + '<br>' +
     'FPS: ' + fps + ' | Speed: ' + speed + ' u/s [' + speedLabel + ']<br>' +
     'Pos: (' + camera.position.x.toFixed(1) + ', ' + camera.position.y.toFixed(1) + ', ' + camera.position.z.toFixed(1) + ')<br>' +
     'Yaw: ' + yawDeg + ' | Pitch: ' + pitchDeg + '<br>' +
@@ -5873,7 +6212,8 @@ function updateDebugInfo(deltaTime) {
     'Walls: ' + collidableBoxes.length + ' | Stamina: ' + Math.round(stamina) + '%<br>' +
     'Weapon: ' + weaponLabel + ammoInfo + ' | Items: ' + weaponCount + '<br>' +
     'Grenade: ' + grenadeInfo + ' | Active: ' + activeGrenades.length + (isGrenadeAiming ? ' [AIMING]' : '') + '<br>' +
-    'Keys: ' + (keysPressed.length > 0 ? keysPressed.join('+') : '—') + fistInfo + pistolInfo + shotgunInfo + sniperInfo;
+    'Keys: ' + (keysPressed.length > 0 ? keysPressed.join('+') : '—') + fistInfo + pistolInfo + shotgunInfo + sniperInfo + '<br>' +
+    'Test: F5=20dmg | F6=Headshot(40dmg) | F7=Kill(100dmg)';
 }
 
 // ── Entry Point ─────────────────────────────────────────────

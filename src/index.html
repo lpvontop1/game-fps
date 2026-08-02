@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FPS Game 3D — Tahap 18</title>
+  <title>FPS Game 3D — Tahap 19</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -34,6 +34,9 @@
         <span class="ctrl-key">H</span> Smoke (hold=aim) &nbsp;&nbsp;
         <span class="ctrl-key">B</span> Drop &nbsp;&nbsp;
         <span class="ctrl-key">I</span> Armor &nbsp;&nbsp;
+        <span class="ctrl-key">F5</span> Test 20dmg &nbsp;&nbsp;
+        <span class="ctrl-key">F6</span> Test Headshot &nbsp;&nbsp;
+        <span class="ctrl-key">F7</span> Test Kill &nbsp;&nbsp;
         <span class="ctrl-key">ESC</span> Lepas
       </div>
     </div>
@@ -79,6 +82,9 @@
     <div class="ctrl-row"><span class="ctrl-key">6</span> Sniper (Q=switch, RMB=scope)</div>
     <div class="ctrl-row"><span class="ctrl-key">B</span> Drop senjata</div>
     <div class="ctrl-row"><span class="ctrl-key">I</span> Armor inventory (equip/unequip)</div>
+    <div class="ctrl-row"><span class="ctrl-key">F5</span> Test damage (20)</div>
+    <div class="ctrl-row"><span class="ctrl-key">F6</span> Test headshot (40)</div>
+    <div class="ctrl-row"><span class="ctrl-key">F7</span> Test kill (100)</div>
     <div class="ctrl-row"><span class="ctrl-key">+</span><span class="ctrl-key">-</span> Sensitivitas</div>
     <div class="ctrl-row"><span class="ctrl-key">ESC</span> Lepas</div>
   </div>
@@ -155,6 +161,24 @@
       <span class="armor-value" id="armor-shoes-value">None</span>
     </div>
     <div class="armor-total">DEF: <span id="armor-total-defense">0</span></div>
+  </div>
+
+  <!-- Tahap 19: HP Bar (top-left, below armor) -->
+  <div id="hp-bar">
+    <div id="hp-fill"></div>
+    <span id="hp-text">100</span>
+    <span id="hp-label">HP</span>
+  </div>
+
+  <!-- Tahap 19: Damage Flash (full-screen red overlay) -->
+  <div id="damage-flash"></div>
+
+  <!-- Tahap 19: Death Screen -->
+  <div id="death-screen" style="display:none;">
+    <div class="death-content">
+      <h2>YOU DIED</h2>
+      <p>Respawning in <span id="respawn-timer">3</span>s...</p>
+    </div>
   </div>
 
   <!-- Tahap 18: Armor Inventory Screen (I key) -->
