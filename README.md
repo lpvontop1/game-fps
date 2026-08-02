@@ -55,6 +55,9 @@ fps-game/
 | I | Armor inventory (equip/unequip) |
 | R | Reload |
 | + / - | Sensitivitas mouse |
+| F5 | Test damage (20) |
+| F6 | Test headshot (40) |
+| F7 | Test kill (100) |
 | ESC | Lepas pointer lock |
 
 ## Tahapan Pengembangan
@@ -79,7 +82,9 @@ fps-game/
 | 16 | Sistem Senjata — Sniper Rifle | ✅ Selesai |
 | 17 | Sistem Senjata — Switching & Inventory Pemain | ✅ Selesai |
 | 18 | Sistem Armor — Helmet, Vest, Celana, Sepatu | ✅ Selesai |
-| 19–36 | HP, Bot AI, Tim, Mode, UI, Polish | 🔜 Mendatang |
+| 19 | HP & Damage Calculation — Death & Respawn | ✅ Selesai |
+| 20 | Bot AI — Pergerakan & Pathfinding Dasar | ✅ Selesai |
+| 21–36 | Bot AI Shooting, Combat, Tim, Mode, UI, Polish | 🔜 Mendatang |
 
 ## Senjata Tersedia
 
@@ -102,15 +107,39 @@ fps-game/
 | Pants | Pants Light / Medium / Heavy | +8 / +20 / +40 | — |
 | Shoes | Shoes Light / Medium / Heavy | +5 / +12 / +25 | +0.5 SPD / — / -1 SPD |
 
+## Fitur Tahap 20 — Bot AI
+
+- **Minecraft-style blocky bots**: Head, body, arms, legs, shoes — semua BoxGeometry
+- **3 bots** spawn di arena dengan posisi acak
+- **Walk animation**: Kaki dan tangan berayun saat berjalan (seperti Minecraft)
+- **Waypoint-based patrol**: Bot bergerak dari waypoint ke waypoint di arena
+- **State machine**: patrol (default) → chase (saat melihat pemain dalam 30 unit)
+- **Collision detection**: Bot tidak bisa menembus dinding (sama seperti pemain)
+- **Obstacle avoidance**: Raycast ke depan, belok jika terhalang
+- **Stuck detection**: Jika bot tidak bergerak selama 3 detik, cari waypoint baru
+- **Bot hit detection**: Tembak bot dengan senjata api, headshot support
+- **Bot death & respawn**: Bot mati dan respawn setelah 5 detik
+- **Enemy team**: Bot berwarna merah (shirt) dengan kulit, celana biru, dan sepatu gelap
+
+## Fitur Tahap 19 — HP & Damage
+
+- **Player HP**: 100 HP, ditampilkan di bar HP (top-left)
+- **Damage calculation**: Damage dikurangi armor defense (percentage-based reduction)
+- **Armor formula**: `damage * (1 - totalDefense/200)`, max 75% reduction
+- **Headshot minimum**: Headshot selalu minimum 10 damage, bahkan dengan heavy armor
+- **Fall damage**: 10 damage per unit di atas 3 unit jatuh
+- **Death & respawn**: Mati → layar "YOU DIED" → respawn 3 detik di spawn point
+- **Damage flash**: Layar merah flash saat terkena damage
+- **Test keys**: F5=20dmg, F6=headshot(40dmg), F7=kill(100dmg)
+
 ## Fitur Tahap 18 — Sistem Armor
 
 - **4 armor slots**: Helmet, Vest, Pants, Shoes — masing-masing bisa di-equip/unequip
-- **Defense stat**: Setiap armor punya defense value sesuai item.json, total defense = sum of all
-- **Speed bonus/penalty**: Shoes Light (+0.5 speed), Shoes Heavy (-1 speed) mempengaruhi movement
+- **Defense stat**: Percentage-based reduction (max 75%), bukan flat subtraction
+- **Speed bonus/penalty**: Shoes Light (+0.5 speed), Shoes Heavy (-1 speed)
 - **Armor HUD**: Top-left panel menampilkan armor yang di-equip dan total defense
 - **Inventory screen**: Tombol I = buka armor inventory, klik item untuk equip/unequip
-- **Equip/unequip**: Klik item di inventory untuk equip, klik equipped item untuk unequip
-- **Replace armor**: Equip item baru di slot yang sama otomatis mengganti yang lama
+- **Fullscreen restore**: Menutup inventory otomatis mengembalikan fullscreen + pointer lock
 
 ## Fitur Tahap 17 — Weapon Switching & Inventory
 
@@ -118,81 +147,16 @@ fps-game/
 - **Drop weapon**: Tombol B = drop current weapon ke ground sebagai pickup item
 - **Pickup weapon**: Walk over dropped weapon untuk auto-pickup (2 detik cooldown setelah drop)
 - **Quick-switch**: Tombol Q = cycle weapon variant (Pistol/Rifle/Shotgun/Sniper)
-- **SMG variant**: Slot 4 (Rifle) bisa switch antara Assault Rifle dan SMG via Q key
-- **Inventory tracking**: Dropped weapons retain ammo state
-- **Pickup notification**: On-screen text saat mengambil weapon pickup
+- **Inventory tracking**: Dropped weapons retain ammo state, variant removal from ownedVariants
+- **Slot skip**: Switching slots otomatis skip ke variant yang tersedia
 
-## Fitur Tahap 16 — Sniper Rifle
+## Bug Fixes (Tahap 20 / v8)
 
-- **Scope/Zoom**: Klik kanan hold = zoom (FOV 75 → 20), lerp transition smooth
-- **Scope overlay**: CSS circle border + fine crosshair saat zoom aktif
-- **2 varian sniper**: Bolt Sniper (damage 90, rate 0.5/s) dan Semi-Auto Sniper (damage 70, rate 1.0/s)
-- **FOV transition**: Lerp dari 75 → 20 saat klik kanan, kembali saat release
-
-## Bug Fixes (Tahap 18)
-
-- **Smoke grenade v5**: Asap sekarang benar — dari luar TIDAK bisa menembus asap (3D sprites opaque), dari dalam kabur tapi tidak gelap total (CSS overlay lebih ringan)
-- **Weapon drop cooldown**: Senjata yang di-drop tidak auto-pickup selama 2 detik (mencegah bug auto-reequip)
-- **Weapon drop position**: Senjata di-drop 1.5 unit di depan player, bukan di kaki player
-- **Weapon ground stability**: Dropped weapons tetap di y=0.15, tidak no-clip ke bawah map
-
-## Fitur Lengkap (Tahap 01–18)
-
-### Sistem Gerakan
-- **WASD movement**: Framerate-independent velocity dengan lerp
-- **Sprint**: Shift + W, stamina bar, cooldown recovery
-- **Crouch/Crawl**: Toggle C, height & speed berubah, crosshair mengecil
-- **Jump**: Fisika gravity, landing detection
-
-### Sistem Kamera
-- **FPS Camera**: Pointer Lock API, yaw/pitch, YXZ order
-- **Pitch limit**: ±89.9° untuk mencegah gimbal lock
-- **Sensitivity**: Adjustable via +/- keys
-
-### Sistem Collision
-- **AABB collision**: XZ plane dengan Y-axis overlap check
-- **Top surface collision**: Cover boxes bisa diinjak
-- **Outer walls**: Arena terbatas
-
-### Sistem Arena
-- **50x50 map**: Outer walls, central arena, corridors, rooms
-- **Choke points**: Pillars, cover boxes, strategic positions
-- **Dynamic collision rebuild**: Otomatis saat arena berubah
-
-### Sistem Senjata
-- **Raycast shooting**: Three.js Raycaster dari kamera
-- **Muzzle flash**: Efek kilatan di depan kamera (disabled untuk melee)
-- **Hit detection**: Bullet impact decal pada dinding/objek
-- **Rate of fire**: Sesuai data item.json
-- **Spread**: Offset random arah raycast per senjata
-- **Shotgun pellets**: 6-8 pellets per tembakan dengan spread tinggi
-- **Magazine & ammo**: Track currentAmmo, auto-reload saat habis
-- **Reload**: Tombol R untuk manual, indicator HUD saat reloading
-- **Recoil**: Visual recoil yang mempengaruhi crosshair
-- **Hit marker**: Indikator visual di crosshair saat mengenai objek
-
-### Sistem Melee
-- **Fist**: Tangan kosong dengan punch animation, visual anatomi tangan realistis
-- **Knife**: Pisau tactical dengan slash animation
-
-### Sistem Grenade
-- **Frag Grenade**: Projectile physics, arc, detonasi, radius damage
-- **Smoke Grenade**: 40 sprites berlapis (core + edge), opaque dari luar, hazy dari dalam
-- **Aim/charge mechanic**: Hold untuk mengatur jarak lempar
-
-### Sistem Armor
-- **4 slots**: Helmet, Vest, Pants, Shoes
-- **Equip/unequip**: Inventory screen via tombol I
-- **Defense calculation**: Total defense dari semua armor yang di-equip
-- **Speed modifier**: Shoes mempengaruhi movement speed
-
-### Sistem HUD
-- **Crosshair**: Dynamic 4-line dengan spread berdasarkan stance/speed
-- **Weapon panel**: Slot senjata, current weapon highlighted
-- **Ammo counter**: Current magazine / reserve
-- **Stamina bar**: Sprint stamina indicator
-- **Grenade indicator**: Tampilkan tipe granat aktif
-- **Armor HUD**: Top-left panel menampilkan armor yang di-equip dan total defense
+- **Armor inventory fullscreen**: Menutup inventory dengan I sekarang mengembalikan fullscreen + pointer lock
+- **Headshot damage**: Armor reduction sekarang percentage-based (max 75%), headshot minimum 10 dmg
+- **UI reorganize**: Semua HUD element lebih compact dan tidak tumpang tindih
+- **Smoke grenade**: Throttled fade updates (200ms) dan overlay updates (300ms) untuk mengurangi lag
+- **Weapon drop**: Hanya menghapus variant spesifik dari ownedVariants, bukan seluruh kategori
 
 ## Teknologi
 
