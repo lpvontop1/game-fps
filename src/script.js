@@ -5559,7 +5559,7 @@ function updateFallDamage() {
 // Press F5 to test damage, F6 to test headshot, F7 to kill self
 
 // ══════════════════════════════════════════════════════════════
-//  TAHAP 20: BOT AI — MOVEMENT & PATHFINDING
+//  TAHAP 20: BOT AI — MOVEMENT & PATHFINDING (v2 — pathfinding, jump, anim fixes)
 // ══════════════════════════════════════════════════════════════
 
 // ── Bot Configuration ─────────────────────────────────────────
@@ -5578,9 +5578,14 @@ const BOT_CONFIG = {
   detectionRange: 30,    // How far bots can detect player
   patrolRadius: 15,      // How far from spawn point a bot patrols
   raycastCheckDist: 2.0, // Distance to check for wall ahead
-  turnSpeed: 2.0,        // How fast bots turn (radians/sec)
-  stuckTimer: 3.0,       // Time before bot considers itself stuck
+  turnSpeed: 3.0,        // How fast bots turn (radians/sec) — v2: faster
+  stuckTimer: 1.5,       // Time before bot considers itself stuck — v2: shorter
+  stuckMoveThreshold: 0.3, // v2: how little movement = stuck
   respawnTime: 5.0,      // Bot respawn time
+  jumpForce: 5.0,        // v2: bot jump force
+  gravity: -9.8,         // v2: bot gravity
+  avoidTimer: 2.0,       // v2: how long to avoid an obstacle before trying new path
+  pathRecalcInterval: 1.0, // v2: how often to recalculate path to player
 };
 
 // ── Bot State ─────────────────────────────────────────────────
@@ -5632,10 +5637,10 @@ function generateWaypoints() {
   console.log('Generated ' + botWaypoints.length + ' waypoints for bots');
 }
 
-// ── Create Minecraft-style Blocky Bot ─────────────────────────
+// ── Create Minecraft-style Blocky Bot (v2 — shoes as leg children) ────
 function createBotMesh() {
   // Build a Minecraft-style blocky humanoid
-  // Body parts: head, body, left arm, right arm, left leg, right leg
+  // v2: Shoes are children of legs so they animate together
   const group = new THREE.Group();
 
   // Colors — enemy team red
@@ -5683,47 +5688,63 @@ function createBotMesh() {
   group.add(rightEye);
 
   // ── Left Arm ──
+  // v2: Pivot point at shoulder (top of arm) so rotation looks natural
+  const leftArmPivot = new THREE.Group();
+  leftArmPivot.position.set(-bw / 2 - aw / 2, lh + bh, 0);
   const leftArmGeo = new THREE.BoxGeometry(aw, ah, aw);
   const leftArm = new THREE.Mesh(leftArmGeo, skinMat);
-  leftArm.position.set(-bw / 2 - aw / 2, lh + bh - ah / 2, 0);
+  leftArm.position.y = -ah / 2;  // Offset so pivot is at top
   leftArm.name = 'bot_left_arm';
-  group.add(leftArm);
+  leftArmPivot.add(leftArm);
+  group.add(leftArmPivot);
 
   // ── Right Arm ──
+  const rightArmPivot = new THREE.Group();
+  rightArmPivot.position.set(bw / 2 + aw / 2, lh + bh, 0);
   const rightArmGeo = new THREE.BoxGeometry(aw, ah, aw);
   const rightArm = new THREE.Mesh(rightArmGeo, skinMat);
-  rightArm.position.set(bw / 2 + aw / 2, lh + bh - ah / 2, 0);
+  rightArm.position.y = -ah / 2;  // Offset so pivot is at top
   rightArm.name = 'bot_right_arm';
-  group.add(rightArm);
+  rightArmPivot.add(rightArm);
+  group.add(rightArmPivot);
 
-  // ── Left Leg ──
+  // ── Left Leg + Shoe ──
+  // v2: Pivot at hip (top of leg) so leg rotates from hip, shoe follows
+  const leftLegPivot = new THREE.Group();
+  leftLegPivot.position.set(-bw / 4, lh, 0);  // Pivot at hip
   const leftLegGeo = new THREE.BoxGeometry(lw, lh, lw);
   const leftLeg = new THREE.Mesh(leftLegGeo, pantsMat);
-  leftLeg.position.set(-bw / 4, lh / 2, 0);
+  leftLeg.position.y = -lh / 2;  // Offset so pivot is at top
   leftLeg.name = 'bot_left_leg';
-  group.add(leftLeg);
-
-  // ── Right Leg ──
-  const rightLegGeo = new THREE.BoxGeometry(lw, lh, lw);
-  const rightLeg = new THREE.Mesh(rightLegGeo, pantsMat);
-  rightLeg.position.set(bw / 4, lh / 2, 0);
-  rightLeg.name = 'bot_right_leg';
-  group.add(rightLeg);
-
-  // ── Shoes (small boxes at bottom of legs) ──
+  leftLegPivot.add(leftLeg);
+  // v2: Shoe is child of leg, so it moves with the leg
   const shoeGeo = new THREE.BoxGeometry(lw + 0.04, 0.1, lw + 0.06);
   const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
-  leftShoe.position.set(-bw / 4, 0.05, -0.02);
-  group.add(leftShoe);
-  const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
-  rightShoe.position.set(bw / 4, 0.05, -0.02);
-  group.add(rightShoe);
+  leftShoe.position.set(0, -lh + 0.05, -0.02);  // At bottom of leg
+  leftShoe.name = 'bot_left_shoe';
+  leftLegPivot.add(leftShoe);
+  group.add(leftLegPivot);
 
-  // Cache references for animation
-  group.userData.leftArm = leftArm;
-  group.userData.rightArm = rightArm;
-  group.userData.leftLeg = leftLeg;
-  group.userData.rightLeg = rightLeg;
+  // ── Right Leg + Shoe ──
+  const rightLegPivot = new THREE.Group();
+  rightLegPivot.position.set(bw / 4, lh, 0);  // Pivot at hip
+  const rightLegGeo = new THREE.BoxGeometry(lw, lh, lw);
+  const rightLeg = new THREE.Mesh(rightLegGeo, pantsMat);
+  rightLeg.position.y = -lh / 2;  // Offset so pivot is at top
+  rightLeg.name = 'bot_right_leg';
+  rightLegPivot.add(rightLeg);
+  // v2: Shoe is child of leg, so it moves with the leg
+  const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
+  rightShoe.position.set(0, -lh + 0.05, -0.02);  // At bottom of leg
+  rightShoe.name = 'bot_right_shoe';
+  rightLegPivot.add(rightShoe);
+  group.add(rightLegPivot);
+
+  // Cache references for animation (v2: use pivots)
+  group.userData.leftArmPivot = leftArmPivot;
+  group.userData.rightArmPivot = rightArmPivot;
+  group.userData.leftLegPivot = leftLegPivot;
+  group.userData.rightLegPivot = rightLegPivot;
   group.userData.head = head;
 
   // Enable shadows
@@ -5794,6 +5815,20 @@ function spawnBot(botIndex) {
     isDead: false,
     deathTime: 0,
     hp: 100,
+    // v2: Jump state
+    velocityY: 0,
+    isGrounded: true,
+    groundY: 0,
+    isJumping: false,
+    jumpAnimTime: 0,       // 0 = not jumping, >0 = in jump animation
+    jumpPhase: 'none',     // 'none', 'rising', 'falling', 'landing'
+    // v2: Pathfinding state
+    avoidDir: 0,            // Direction to avoid obstacle (angle)
+    avoidTimer: 0,          // Timer for avoiding obstacle
+    pathRecalcTimer: 0,     // Timer for path recalculation
+    lastChasePath: null,    // Last path to player
+    strafeDir: 0,           // v2: strafe direction when chasing (to avoid circling)
+    strafeTimer: 0,         // v2: timer for strafe direction change
   };
 
   activeBots.push(bot);
@@ -5850,13 +5885,23 @@ function findNextWaypoint(currentX, currentZ) {
 }
 
 // ── Check if Bot Can Move to Position (Collision) ────────────
-function canBotMoveTo(x, z, botRadius) {
+// v2: Takes bot Y position into account for cover objects
+function canBotMoveTo(x, z, botRadius, botY) {
+  const botFeetY = botY || 0;
+  const botHeadY = botFeetY + BOT_CONFIG.height;
+
   for (const box of collidableBoxes) {
+    // v2: Check if bot can step over cover objects
+    if (box.isCover) {
+      // If bot's feet are above the cover top, can pass over
+      if (botFeetY >= box.maxY - 0.15) continue;
+    }
+
+    // Y-axis check: only collide if bot body overlaps with box vertically
+    if (botHeadY < box.minY || botFeetY > box.maxY) continue;
+
     const closestX = Math.max(box.minX, Math.min(x, box.maxX));
     const closestZ = Math.max(box.minZ, Math.min(z, box.maxZ));
-
-    // Check Y overlap (bot is at ground level)
-    if (0 + botRadius < box.minY || 0 - botRadius > box.maxY) continue;
 
     const dx = x - closestX;
     const dz = z - closestZ;
@@ -5869,13 +5914,38 @@ function canBotMoveTo(x, z, botRadius) {
   return true;
 }
 
-// ── Check if Path is Clear (Raycast ahead) ───────────────────
-function isPathClear(x, z, angle, checkDist) {
+// ── Check if a cover object is in front that bot can jump over ──
+// v2: Returns the cover box if one exists ahead, or null
+function getCoverAhead(x, z, angle, checkDist) {
   const dx = -Math.sin(angle) * checkDist;
   const dz = -Math.cos(angle) * checkDist;
 
-  const targetX = x + dx;
-  const targetZ = z + dz;
+  const steps = 5;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + dx * t;
+    const pz = z + dz * t;
+
+    for (const box of collidableBoxes) {
+      if (!box.isCover) continue;
+      // Check if this point is inside the box
+      if (px > box.minX - 0.5 && px < box.maxX + 0.5 &&
+          pz > box.minZ - 0.5 && pz < box.maxZ + 0.5) {
+        return box;
+      }
+    }
+  }
+  return null;
+}
+
+// ── Check if Path is Clear (Raycast ahead) ───────────────────
+// v2: Distinguishes between full walls and cover objects
+function isPathClear(x, z, angle, checkDist, botY) {
+  const dx = -Math.sin(angle) * checkDist;
+  const dz = -Math.cos(angle) * checkDist;
+
+  const botFeetY = botY || 0;
+  const botHeadY = botFeetY + BOT_CONFIG.height;
 
   // Simple AABB check along the path
   const steps = 5;
@@ -5884,15 +5954,34 @@ function isPathClear(x, z, angle, checkDist) {
     const px = x + dx * t;
     const pz = z + dz * t;
 
-    if (!canBotMoveTo(px, pz, 0.5)) {
-      return false;
+    for (const box of collidableBoxes) {
+      // Cover objects: bot can jump over if grounded
+      if (box.isCover) {
+        if (botFeetY >= box.maxY - 0.15) continue; // Already above cover
+        // Cover is blockable if bot can't jump over it
+        // But we'll handle jumping separately — for now, treat as blocked
+        // so bot knows to jump
+      }
+
+      // Y-axis check
+      if (botHeadY < box.minY || botFeetY > box.maxY) continue;
+
+      const closestX = Math.max(box.minX, Math.min(px, box.maxX));
+      const closestZ = Math.max(box.minZ, Math.min(pz, box.maxZ));
+      const ddx = px - closestX;
+      const ddz = pz - closestZ;
+      const distSq = ddx * ddx + ddz * ddz;
+
+      if (distSq < 0.5 * 0.5) {
+        return false;
+      }
     }
   }
 
   return true;
 }
 
-// ── Update Bot AI ────────────────────────────────────────────
+// ── Update Bot AI (v2 — pathfinding, jumping, strafe, animations) ────
 function updateBots(deltaTime) {
   const now = performance.now() / 1000;
 
@@ -5916,18 +6005,89 @@ function updateBots(deltaTime) {
     const distToPlayer = Math.sqrt(dx * dx + dz * dz);
 
     // ── State Machine ──
-    // Check if player is within detection range
     if (distToPlayer < BOT_CONFIG.detectionRange && !isPlayerDead) {
       bot.state = 'chase';
     } else {
       bot.state = 'patrol';
     }
 
-    // ── Stuck Detection ──
+    // ── v2: Gravity & Jump Physics ──
+    if (!bot.isGrounded) {
+      bot.velocityY += BOT_CONFIG.gravity * deltaTime;
+      bot.groundY += bot.velocityY * deltaTime;
+
+      // Check landing on ground or cover objects
+      if (bot.groundY <= 0) {
+        bot.groundY = 0;
+        bot.velocityY = 0;
+        bot.isGrounded = true;
+        bot.isJumping = false;
+        bot.jumpPhase = 'landing';
+        bot.jumpAnimTime = 0.3; // Landing animation duration
+      } else {
+        // Check if bot has landed on a cover object
+        for (const box of collidableBoxes) {
+          if (!box.isCover) continue;
+          // Check if bot is above this cover
+          if (bot.position.x > box.minX - 0.5 && bot.position.x < box.maxX + 0.5 &&
+              bot.position.z > box.minZ - 0.5 && bot.position.z < box.maxZ + 0.5) {
+            if (bot.groundY <= box.maxY && bot.groundY + Math.abs(bot.velocityY * deltaTime) >= box.maxY - 0.2) {
+              bot.groundY = box.maxY;
+              bot.velocityY = 0;
+              bot.isGrounded = true;
+              bot.isJumping = false;
+              bot.jumpPhase = 'landing';
+              bot.jumpAnimTime = 0.3;
+              break;
+            }
+          }
+        }
+      }
+
+      // Update jump phase
+      if (bot.isJumping) {
+        if (bot.velocityY > 0) {
+          bot.jumpPhase = 'rising';
+        } else {
+          bot.jumpPhase = 'falling';
+        }
+      }
+    } else {
+      // Check if bot is still on a cover object
+      if (bot.groundY > 0) {
+        let onCover = false;
+        for (const box of collidableBoxes) {
+          if (!box.isCover) continue;
+          if (bot.position.x > box.minX - 0.5 && bot.position.x < box.maxX + 0.5 &&
+              bot.position.z > box.minZ - 0.5 && bot.position.z < box.maxZ + 0.5) {
+            if (Math.abs(bot.groundY - box.maxY) < 0.2) {
+              onCover = true;
+              break;
+            }
+          }
+        }
+        if (!onCover) {
+          // Walked off cover — start falling
+          bot.isGrounded = false;
+          bot.velocityY = 0;
+        }
+      }
+    }
+
+    // ── Landing animation timer ──
+    if (bot.jumpPhase === 'landing') {
+      bot.jumpAnimTime -= deltaTime;
+      if (bot.jumpAnimTime <= 0) {
+        bot.jumpPhase = 'none';
+        bot.jumpAnimTime = 0;
+      }
+    }
+
+    // ── Stuck Detection (v2: shorter timer, smaller threshold) ──
     bot.stuckCheckTimer += deltaTime;
     if (bot.stuckCheckTimer >= BOT_CONFIG.stuckTimer) {
       const moved = bot.position.distanceTo(bot.lastPosition);
-      if (moved < 0.5) {
+      if (moved < BOT_CONFIG.stuckMoveThreshold) {
         bot.isStuck = true;
       } else {
         bot.isStuck = false;
@@ -5941,9 +6101,45 @@ function updateBots(deltaTime) {
     let moveSpeed = bot.speed;
 
     if (bot.state === 'chase') {
-      // Move toward player
-      targetX = playerX;
-      targetZ = playerZ;
+      // v2: Don't chase directly — use strafing to avoid circling
+      // Calculate direction to player
+      const toPlayerX = playerX - bot.position.x;
+      const toPlayerZ = playerZ - bot.position.z;
+      const toPlayerLen = Math.sqrt(toPlayerX * toPlayerX + toPlayerZ * toPlayerZ);
+
+      if (toPlayerLen > 0) {
+        // v2: Strafe component — bot moves sideways relative to player
+        // This prevents the "following in circles" behavior
+        bot.strafeTimer -= deltaTime;
+        if (bot.strafeTimer <= 0) {
+          bot.strafeDir = Math.random() > 0.5 ? 1 : -1;
+          bot.strafeTimer = 2 + Math.random() * 3; // Change strafe every 2-5 seconds
+        }
+
+        // Forward direction (toward player)
+        const fwdX = toPlayerX / toPlayerLen;
+        const fwdZ = toPlayerZ / toPlayerLen;
+
+        // Strafe direction (perpendicular to forward)
+        const strafeX = -fwdZ * bot.strafeDir;
+        const strafeZ = fwdX * bot.strafeDir;
+
+        // Mix forward and strafe (more forward when far, more strafe when close)
+        const strafeWeight = distToPlayer < 8 ? 0.5 : 0.2;
+        const fwdWeight = 1.0 - strafeWeight;
+
+        targetX = bot.position.x + (fwdX * fwdWeight + strafeX * strafeWeight) * 10;
+        targetZ = bot.position.z + (fwdZ * fwdWeight + strafeZ * strafeWeight) * 10;
+
+        // If very close, just move toward player
+        if (distToPlayer < 3) {
+          targetX = playerX;
+          targetZ = playerZ;
+        }
+      } else {
+        targetX = playerX;
+        targetZ = playerZ;
+      }
     } else {
       // Patrol: move toward waypoint
       if (!bot.targetWaypoint) {
@@ -5963,9 +6159,17 @@ function updateBots(deltaTime) {
 
       // If stuck, find a new waypoint
       if (bot.isStuck) {
-        bot.targetWaypoint = findNearestWaypoint(bot.position.x, bot.position.z);
+        bot.targetWaypoint = findNextWaypoint(bot.position.x, bot.position.z);
         bot.isStuck = false;
       }
+    }
+
+    // v2: If stuck while chasing, try to unstick
+    if (bot.isStuck && bot.state === 'chase') {
+      bot.isStuck = false;
+      // Try a random direction to unstick
+      bot.avoidDir = Math.random() * Math.PI * 2;
+      bot.avoidTimer = BOT_CONFIG.avoidTimer;
     }
 
     // Calculate direction to target
@@ -5993,10 +6197,46 @@ function updateBots(deltaTime) {
         bot.facingAngle = targetAngle;
       }
 
-      // Check if path ahead is clear
-      const pathClear = isPathClear(bot.position.x, bot.position.z, bot.facingAngle, BOT_CONFIG.raycastCheckDist);
+      // v2: Avoidance timer — if bot was stuck, temporarily turn away
+      if (bot.avoidTimer > 0) {
+        bot.avoidTimer -= deltaTime;
+        bot.facingAngle = bot.avoidDir;
+      }
 
-      if (pathClear) {
+      // v2: Check if path is blocked, and if it's a cover object, try to jump
+      const pathClear = isPathClear(bot.position.x, bot.position.z, bot.facingAngle, BOT_CONFIG.raycastCheckDist, bot.groundY);
+
+      if (!pathClear && bot.isGrounded) {
+        // v2: Check if there's a cover object ahead that we can jump over
+        const coverAhead = getCoverAhead(bot.position.x, bot.position.z, bot.facingAngle, BOT_CONFIG.raycastCheckDist);
+        if (coverAhead && bot.groundY < coverAhead.maxY) {
+          // Jump over the cover!
+          bot.isJumping = true;
+          bot.isGrounded = false;
+          bot.velocityY = BOT_CONFIG.jumpForce;
+          bot.jumpPhase = 'rising';
+          bot.jumpAnimTime = 0;
+        } else {
+          // Full wall — need to find a way around
+          // v2: Try to find a clear path by turning
+          const tryAngles = [Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2, Math.PI * 2 / 3, -Math.PI * 2 / 3];
+          let foundClearPath = false;
+          for (const turnAngle of tryAngles) {
+            const testAngle = bot.facingAngle + turnAngle;
+            if (isPathClear(bot.position.x, bot.position.z, testAngle, BOT_CONFIG.raycastCheckDist, bot.groundY)) {
+              bot.facingAngle = testAngle;
+              foundClearPath = true;
+              break;
+            }
+          }
+          if (!foundClearPath) {
+            // Completely blocked — try turning around
+            bot.facingAngle += Math.PI + (Math.random() - 0.5) * Math.PI / 2;
+          }
+        }
+      }
+
+      if (pathClear || !bot.isGrounded) {
         // Move forward in facing direction
         const moveX = -Math.sin(bot.facingAngle) * moveSpeed * deltaTime;
         const moveZ = -Math.cos(bot.facingAngle) * moveSpeed * deltaTime;
@@ -6004,24 +6244,32 @@ function updateBots(deltaTime) {
         const newX = bot.position.x + moveX;
         const newZ = bot.position.z + moveZ;
 
-        // Collision check for new position
-        if (canBotMoveTo(newX, newZ, CONFIG.playerRadius || 0.5)) {
+        // v2: Collision check with bot Y position
+        if (canBotMoveTo(newX, newZ, CONFIG.playerRadius || 0.5, bot.groundY)) {
           bot.position.x = newX;
           bot.position.z = newZ;
         } else {
           // Try to slide along the wall (move in X or Z only)
-          if (canBotMoveTo(newX, bot.position.z, CONFIG.playerRadius || 0.5)) {
+          if (canBotMoveTo(newX, bot.position.z, CONFIG.playerRadius || 0.5, bot.groundY)) {
             bot.position.x = newX;
-          } else if (canBotMoveTo(bot.position.x, newZ, CONFIG.playerRadius || 0.5)) {
+          } else if (canBotMoveTo(bot.position.x, newZ, CONFIG.playerRadius || 0.5, bot.groundY)) {
             bot.position.z = newZ;
           } else {
-            // Completely blocked — turn away
-            bot.facingAngle += (Math.random() > 0.5 ? 1 : -1) * Math.PI / 2;
+            // v2: Try to find a clear path by turning
+            const tryAngles = [Math.PI / 3, -Math.PI / 3, Math.PI / 2, -Math.PI / 2];
+            for (const turnAngle of tryAngles) {
+              const testAngle = bot.facingAngle + turnAngle;
+              const testX = bot.position.x - Math.sin(testAngle) * moveSpeed * deltaTime;
+              const testZ = bot.position.z - Math.cos(testAngle) * moveSpeed * deltaTime;
+              if (canBotMoveTo(testX, testZ, CONFIG.playerRadius || 0.5, bot.groundY)) {
+                bot.facingAngle = testAngle;
+                bot.position.x = testX;
+                bot.position.z = testZ;
+                break;
+              }
+            }
           }
         }
-      } else {
-        // Obstacle ahead — turn away
-        bot.facingAngle += (Math.random() > 0.5 ? 1 : -1) * Math.PI / 3 * deltaTime;
       }
     }
 
@@ -6030,38 +6278,57 @@ function updateBots(deltaTime) {
     bot.position.x = Math.max(-halfS, Math.min(halfS, bot.position.x));
     bot.position.z = Math.max(-halfS, Math.min(halfS, bot.position.z));
 
-    // Update mesh position and rotation
+    // Update mesh position and rotation (v2: Y position from jump physics)
+    bot.position.y = bot.groundY;
     bot.mesh.position.copy(bot.position);
     bot.mesh.rotation.y = bot.facingAngle;
 
-    // ── Walk Animation ──
+    // ── v2: Walk & Jump Animation ──
     const isMoving = dirLen > 0.5;
-    if (isMoving) {
+    const leftLegPivot = bot.mesh.userData.leftLegPivot;
+    const rightLegPivot = bot.mesh.userData.rightLegPivot;
+    const leftArmPivot = bot.mesh.userData.leftArmPivot;
+    const rightArmPivot = bot.mesh.userData.rightArmPivot;
+
+    if (bot.jumpPhase === 'rising') {
+      // v2: Rising animation — legs tuck up, arms raise
+      const riseT = Math.min(1, Math.abs(bot.velocityY) / BOT_CONFIG.jumpForce);
+      if (leftLegPivot) leftLegPivot.rotation.x = -riseT * 0.6;
+      if (rightLegPivot) rightLegPivot.rotation.x = -riseT * 0.6;
+      if (leftArmPivot) leftArmPivot.rotation.x = -riseT * 0.8;
+      if (rightArmPivot) rightArmPivot.rotation.x = -riseT * 0.8;
+    } else if (bot.jumpPhase === 'falling') {
+      // v2: Falling animation — legs dangle down, arms spread
+      if (leftLegPivot) leftLegPivot.rotation.x = 0.2;
+      if (rightLegPivot) rightLegPivot.rotation.x = 0.2;
+      if (leftArmPivot) leftArmPivot.rotation.x = 0.5;
+      if (rightArmPivot) rightArmPivot.rotation.x = 0.5;
+    } else if (bot.jumpPhase === 'landing') {
+      // v2: Landing animation — legs bend, arms forward
+      const landT = bot.jumpAnimTime / 0.3; // 0.3 = landing duration
+      if (leftLegPivot) leftLegPivot.rotation.x = landT * 0.4;
+      if (rightLegPivot) rightLegPivot.rotation.x = landT * 0.4;
+      if (leftArmPivot) leftArmPivot.rotation.x = -landT * 0.3;
+      if (rightArmPivot) rightArmPivot.rotation.x = -landT * 0.3;
+    } else if (isMoving && bot.isGrounded) {
+      // Walking animation
       bot.walkAnimTime += deltaTime * moveSpeed * 2;
       const swing = Math.sin(bot.walkAnimTime) * 0.5;
 
-      // Animate legs
-      const leftLeg = bot.mesh.userData.leftLeg;
-      const rightLeg = bot.mesh.userData.rightLeg;
-      if (leftLeg) leftLeg.rotation.x = swing;
-      if (rightLeg) rightLeg.rotation.x = -swing;
+      // Animate legs (v2: using pivots)
+      if (leftLegPivot) leftLegPivot.rotation.x = swing;
+      if (rightLegPivot) rightLegPivot.rotation.x = -swing;
 
       // Animate arms (opposite to legs)
-      const leftArm = bot.mesh.userData.leftArm;
-      const rightArm = bot.mesh.userData.rightArm;
-      if (leftArm) leftArm.rotation.x = -swing;
-      if (rightArm) rightArm.rotation.x = swing;
+      if (leftArmPivot) leftArmPivot.rotation.x = -swing;
+      if (rightArmPivot) rightArmPivot.rotation.x = swing;
     } else {
       // Idle: reset animation
       bot.walkAnimTime = 0;
-      const leftLeg = bot.mesh.userData.leftLeg;
-      const rightLeg = bot.mesh.userData.rightLeg;
-      const leftArm = bot.mesh.userData.leftArm;
-      const rightArm = bot.mesh.userData.rightArm;
-      if (leftLeg) leftLeg.rotation.x = 0;
-      if (rightLeg) rightLeg.rotation.x = 0;
-      if (leftArm) leftArm.rotation.x = 0;
-      if (rightArm) rightArm.rotation.x = 0;
+      if (leftLegPivot) leftLegPivot.rotation.x = 0;
+      if (rightLegPivot) rightLegPivot.rotation.x = 0;
+      if (leftArmPivot) leftArmPivot.rotation.x = 0;
+      if (rightArmPivot) rightArmPivot.rotation.x = 0;
     }
   }
 }
@@ -6077,6 +6344,14 @@ function damageBot(bot, damage) {
     bot.isDead = true;
     bot.deathTime = performance.now() / 1000;
 
+    // Reset jump state
+    bot.isJumping = false;
+    bot.isGrounded = true;
+    bot.velocityY = 0;
+    bot.groundY = 0;
+    bot.jumpPhase = 'none';
+    bot.jumpAnimTime = 0;
+
     // Hide the bot mesh (make it fall down)
     bot.mesh.rotation.x = Math.PI / 2;
     bot.mesh.position.y = 0.3;
@@ -6089,6 +6364,14 @@ function respawnBot(bot) {
   bot.isDead = false;
   bot.hp = 100;
   bot.state = 'patrol';
+
+  // Reset jump state
+  bot.isJumping = false;
+  bot.isGrounded = true;
+  bot.velocityY = 0;
+  bot.groundY = 0;
+  bot.jumpPhase = 'none';
+  bot.jumpAnimTime = 0;
 
   // Find a new spawn position
   let spawnPos = null;
@@ -6114,23 +6397,42 @@ function respawnBot(bot) {
   bot.facingAngle = bot.mesh.rotation.y;
   bot.targetWaypoint = findNextWaypoint(spawnPos.x, spawnPos.z);
 
+  // Reset strafe
+  bot.strafeDir = Math.random() > 0.5 ? 1 : -1;
+  bot.strafeTimer = 2 + Math.random() * 3;
+  bot.avoidTimer = 0;
+
   console.log('Bot ' + bot.index + ' respawned');
 }
 
 // ── Check if Bot Was Hit by Player's Shot ────────────────────
+// v2: Uses recursive=true so it detects hits on nested children (shoes inside leg pivots)
 function checkBotHit(raycaster) {
   for (const bot of activeBots) {
     if (bot.isDead) continue;
 
-    // Check intersection with bot mesh children
-    const intersects = raycaster.intersectObjects(bot.mesh.children, false);
+    // v2: recursive=true to check all nested children (pivots > legs/shoes)
+    const intersects = raycaster.intersectObjects(bot.mesh.children, true);
     if (intersects.length > 0) {
       const hit = intersects[0];
 
-      // Determine if headshot
-      const isHeadshot = hit.object.name === 'bot_head';
+      // Determine if headshot — check the hit object and its parents
+      let hitObj = hit.object;
+      let isHeadshot = hitObj.name === 'bot_head';
 
-      // Apply damage (based on weapon damage)
+      // Check if the hit object is inside a pivot group
+      if (!isHeadshot && hitObj.parent) {
+        // Walk up to find the named mesh
+        let checkObj = hitObj;
+        while (checkObj && checkObj !== bot.mesh) {
+          if (checkObj.name === 'bot_head') {
+            isHeadshot = true;
+            break;
+          }
+          checkObj = checkObj.parent;
+        }
+      }
+
       return { bot: bot, headshot: isHeadshot, point: hit.point };
     }
   }

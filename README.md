@@ -83,7 +83,7 @@ fps-game/
 | 17 | Sistem Senjata — Switching & Inventory Pemain | ✅ Selesai |
 | 18 | Sistem Armor — Helmet, Vest, Celana, Sepatu | ✅ Selesai |
 | 19 | HP & Damage Calculation — Death & Respawn | ✅ Selesai |
-| 20 | Bot AI — Pergerakan & Pathfinding Dasar | ✅ Selesai |
+| 20 | Bot AI — Pergerakan & Pathfinding (v2) | ✅ Selesai |
 | 21–36 | Bot AI Shooting, Combat, Tim, Mode, UI, Polish | 🔜 Mendatang |
 
 ## Senjata Tersedia
@@ -107,18 +107,24 @@ fps-game/
 | Pants | Pants Light / Medium / Heavy | +8 / +20 / +40 | — |
 | Shoes | Shoes Light / Medium / Heavy | +5 / +12 / +25 | +0.5 SPD / — / -1 SPD |
 
-## Fitur Tahap 20 — Bot AI
+## Fitur Tahap 20 — Bot AI (v2)
 
 - **Minecraft-style blocky bots**: Head, body, arms, legs, shoes — semua BoxGeometry
 - **3 bots** spawn di arena dengan posisi acak
-- **Walk animation**: Kaki dan tangan berayun saat berjalan (seperti Minecraft)
+- **Walk animation (v2)**: Kaki dan tangan berayun dari pivot point (bahu/pinggul), sepatu ikut bergerak
+- **Jump animation (v2)**: Full jump cycle — rising (kaki ditekuk, tangan naik), falling (kaki menggantung), landing (kaki menekuk, tangan ke depan)
+- **Bot jumping (v2)**: Bot bisa melompati cover object (tembok setengah tinggi) secara otomatis
+- **Jump physics (v2)**: Gravity, velocityY, landing detection on ground & cover objects
 - **Waypoint-based patrol**: Bot bergerak dari waypoint ke waypoint di arena
 - **State machine**: patrol (default) → chase (saat melihat pemain dalam 30 unit)
-- **Collision detection**: Bot tidak bisa menembus dinding (sama seperti pemain)
-- **Obstacle avoidance**: Raycast ke depan, belok jika terhalang
-- **Stuck detection**: Jika bot tidak bergerak selama 3 detik, cari waypoint baru
-- **Bot hit detection**: Tembak bot dengan senjata api, headshot support
-- **Bot death & respawn**: Bot mati dan respawn setelah 5 detik
+- **Collision detection (v2)**: Bot memperhitungkan posisi Y — bisa menembus cover saat di atas
+- **Smart obstacle avoidance (v2)**: Coba belok ke beberapa sudut sebelum menyerah, tidak hanya random
+- **Cover detection (v2)**: Bot mendeteksi cover object di depan dan melompatinya
+- **Strafe movement (v2)**: Bot tidak hanya mengikuti lurus — ada komponen strafe untuk menghindari circling
+- **Stuck detection (v2)**: Lebih cepat (1.5 detik), threshold lebih kecil (0.3 unit), avoidance timer
+- **Bot hit detection (v2)**: Recursive raycast — bisa mengenai semua body part termasuk sepatu dalam pivot
+- **Melee kill support (v2)**: Bot bisa dibunuh dengan tangan kosong dan pisau (raycast recursive fix)
+- **Bot death & respawn**: Bot mati dan respawn setelah 5 detik, reset jump state
 - **Enemy team**: Bot berwarna merah (shirt) dengan kulit, celana biru, dan sepatu gelap
 
 ## Fitur Tahap 19 — HP & Damage
@@ -150,13 +156,18 @@ fps-game/
 - **Inventory tracking**: Dropped weapons retain ammo state, variant removal from ownedVariants
 - **Slot skip**: Switching slots otomatis skip ke variant yang tersedia
 
-## Bug Fixes (Tahap 20 / v8)
+## Bug Fixes (Tahap 20 v2)
 
 - **Armor inventory fullscreen**: Menutup inventory dengan I sekarang mengembalikan fullscreen + pointer lock
 - **Headshot damage**: Armor reduction sekarang percentage-based (max 75%), headshot minimum 10 dmg
 - **UI reorganize**: Semua HUD element lebih compact dan tidak tumpang tindih
 - **Smoke grenade**: Throttled fade updates (200ms) dan overlay updates (300ms) untuk mengurangi lag
 - **Weapon drop**: Hanya menghapus variant spesifik dari ownedVariants, bukan seluruh kategori
+- **Bot pathfinding (v2)**: Bot tidak lagi stuck di belakang tembok setengah tinggi — bisa melompat cover
+- **Bot walk animation (v2)**: Sepatu sekarang bergerak bersama kaki (shoes sebagai child leg pivot)
+- **Bot melee kill (v2)**: Bot bisa dibunuh dengan tangan kosong dan pisau (recursive raycast fix)
+- **Bot circling fix (v2)**: Strafe movement mencegah bot mengikuti pemain dalam lingkaran
+- **Bot obstacle avoidance (v2)**: Coba belok ke beberapa sudut sebelum menyerah, bukan random
 
 ## Teknologi
 
