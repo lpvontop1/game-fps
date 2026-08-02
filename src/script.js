@@ -1,6 +1,6 @@
 /* ============================================================
-   script.js — FPS Game Tahap 19: HP & Damage Calculation
-   + Tahap 01-18 + Bug fixes v7 (smoke, weapon drop, armor, cycle)
+   script.js — FPS Game Tahap 20: Bot AI — Movement & Pathfinding
+   + Tahap 01-19 + Bug fixes v8 (armor fullscreen, headshot dmg, UI)
    ============================================================ */
 
 // ── Konfigurasi ──────────────────────────────────────────────
@@ -739,6 +739,9 @@ function init() {
   // Tahap 09: Load item data
   loadItemData();
 
+  // Tahap 20: Initialize bots (after arena is built)
+  initBots();
+
   // Start Render Loop
   animate();
 }
@@ -1128,25 +1131,43 @@ function shoot() {
     raycaster.set(camera.position, dir);
     raycaster.far = meleeRange;
 
-    // Get all collidable meshes for intersection
-    const collidableMeshes = [];
-    scene.traverse((obj) => {
-      if (obj.userData && obj.userData.collidable && obj.isMesh) {
-        collidableMeshes.push(obj);
+    // Tahap 20: Check if a bot was hit by melee
+    const botHit = checkBotHit(raycaster);
+    if (botHit) {
+      const meleeDamage = wData.damage || 5;
+      if (botHit.headshot) {
+        damageBot(botHit.bot, meleeDamage * 2);
+      } else {
+        damageBot(botHit.bot, meleeDamage);
       }
-    });
-
-    const intersects = raycaster.intersectObjects(collidableMeshes, false);
-
-    if (intersects.length > 0) {
-      const hit = intersects[0];
-      // Show HUD hit marker for melee (red X at crosshair)
+      // Show HUD hit marker for melee
       if (hitMarkerEl) {
         hitMarkerEl.classList.add('active');
         setTimeout(() => { if (hitMarkerEl) hitMarkerEl.classList.remove('active'); }, 200);
       }
-      // Show melee impact (small slash mark)
-      createMeleeImpact(hit.point, hit.object);
+      // Show melee impact on bot
+      createMeleeImpact(botHit.point, null);
+    } else {
+      // Check wall hits
+      const collidableMeshes = [];
+      scene.traverse((obj) => {
+        if (obj.userData && obj.userData.collidable && obj.isMesh) {
+          collidableMeshes.push(obj);
+        }
+      });
+
+      const intersects = raycaster.intersectObjects(collidableMeshes, false);
+
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+        // Show HUD hit marker for melee (red X at crosshair)
+        if (hitMarkerEl) {
+          hitMarkerEl.classList.add('active');
+          setTimeout(() => { if (hitMarkerEl) hitMarkerEl.classList.remove('active'); }, 200);
+        }
+        // Show melee impact (small slash mark)
+        createMeleeImpact(hit.point, hit.object);
+      }
     }
 
     // Update HUD
@@ -1213,7 +1234,43 @@ function shoot() {
 
     const intersects = raycaster.intersectObjects(collidableMeshes, false);
 
-    if (intersects.length > 0) {
+    // Tahap 20: Check if a bot was hit first (before wall)
+    const botHit = checkBotHit(raycaster);
+
+    if (botHit && (intersects.length === 0 || botHit.point.distanceTo(camera.position) < intersects[0].distance)) {
+      // Bot was hit and closer than any wall
+      const distance = botHit.point.distanceTo(camera.position);
+      const maxRange = wData.range || CONFIG.raycastFar;
+      const damageFalloff = distance > maxRange * 0.5
+        ? 1.0 - ((distance - maxRange * 0.5) / (maxRange * 0.5)) * 0.5
+        : 1.0;
+
+      // Calculate weapon damage
+      let weaponDamage = wData.damage || 10;
+      if (wData.pellets) weaponDamage = wData.damage; // Per-pellet damage for shotgun
+
+      // Apply damage falloff
+      const finalDamage = Math.round(weaponDamage * damageFalloff);
+
+      // Headshot multiplier
+      if (botHit.headshot) {
+        damageBot(botHit.bot, finalDamage * 2);
+      } else {
+        damageBot(botHit.bot, finalDamage);
+      }
+
+      // Show hit marker at impact point
+      showHitMarker(botHit.point, null);
+
+      // Show HUD hit marker
+      if (hitMarkerEl) {
+        hitMarkerEl.classList.add('active');
+        setTimeout(() => { if (hitMarkerEl) hitMarkerEl.classList.remove('active'); }, 200);
+      }
+
+      // Create bullet impact visual on bot
+      createBulletImpact(botHit.point, null, distance);
+    } else if (intersects.length > 0) {
       const hit = intersects[0];
 
       // Show hit marker at impact point
@@ -5224,11 +5281,24 @@ function toggleArmorInventory() {
     updateArmorInventoryScreen();
   } else {
     invEl.style.display = 'none';
-    // Re-lock pointer when closing inventory
+    // v8: Re-lock pointer AND restore fullscreen when closing inventory
     // Use a small delay to ensure the UI is fully hidden before re-locking
-    setTimeout(() => {
+    setTimeout(async () => {
       if (!isInventoryOpen && renderer && renderer.domElement) {
+        // Restore fullscreen first
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+            isFullscreen = true;
+          }
+        } catch (err) {}
+        // Then re-lock pointer
         renderer.domElement.requestPointerLock();
+        try {
+          if (navigator.keyboard && navigator.keyboard.lock) {
+            await navigator.keyboard.lock();
+          }
+        } catch (err) {}
       }
     }, 50);
   }
@@ -5299,12 +5369,22 @@ function applyDamage(rawDamage, source, isHeadshot) {
     damage = rawDamage * 2;
   }
 
-  // Apply armor defense reduction
+  // v8: Apply armor defense as percentage reduction instead of flat subtraction
+  // This prevents heavy armor from making headshot damage negligible
+  // Formula: damage * (1 - defenseReduction%), where defenseReduction = totalDefense / 200
+  // Max defense reduction is capped at 75% so there's always meaningful damage
   const totalDefense = getTotalDefense();
-  let effectiveDamage = damage - totalDefense;
+  const defenseReduction = Math.min(totalDefense / 200, 0.75);
+  let effectiveDamage = damage * (1 - defenseReduction);
 
   // Minimum effective damage is always 1
   if (effectiveDamage < 1) effectiveDamage = 1;
+
+  // Headshot minimum: even with full heavy armor, headshot should do at least 10 dmg
+  if (isHeadshot && effectiveDamage < 10) effectiveDamage = 10;
+
+  // Round to avoid floating point issues
+  effectiveDamage = Math.round(effectiveDamage);
 
   // Reduce HP
   playerHP -= effectiveDamage;
@@ -5477,6 +5557,585 @@ function updateFallDamage() {
 
 // ── Self-damage test command (F5 key for testing) ──────────
 // Press F5 to test damage, F6 to test headshot, F7 to kill self
+
+// ══════════════════════════════════════════════════════════════
+//  TAHAP 20: BOT AI — MOVEMENT & PATHFINDING
+// ══════════════════════════════════════════════════════════════
+
+// ── Bot Configuration ─────────────────────────────────────────
+const BOT_CONFIG = {
+  count: 3,              // Number of bots in the arena
+  speed: 3.0,            // Bot walk speed (slower than player)
+  height: 1.7,           // Bot standing height
+  bodyWidth: 0.6,        // Bot body width
+  bodyHeight: 1.2,       // Bot body height
+  bodyDepth: 0.4,        // Bot body depth
+  headSize: 0.4,         // Bot head size
+  armWidth: 0.2,         // Bot arm width
+  armHeight: 0.8,        // Bot arm height
+  legWidth: 0.2,         // Bot leg width
+  legHeight: 0.7,        // Bot leg height
+  detectionRange: 30,    // How far bots can detect player
+  patrolRadius: 15,      // How far from spawn point a bot patrols
+  raycastCheckDist: 2.0, // Distance to check for wall ahead
+  turnSpeed: 2.0,        // How fast bots turn (radians/sec)
+  stuckTimer: 3.0,       // Time before bot considers itself stuck
+  respawnTime: 5.0,      // Bot respawn time
+};
+
+// ── Bot State ─────────────────────────────────────────────────
+const activeBots = [];       // Array of active bot objects
+let botWaypoints = [];       // Array of waypoint positions
+
+// ── Waypoint Generation ──────────────────────────────────────
+// Generate waypoints throughout the arena for bots to patrol
+function generateWaypoints() {
+  const S = CONFIG.arenaSize;
+  const halfS = S / 2;
+  const spacing = 8; // Distance between waypoints
+
+  botWaypoints = [];
+
+  // Generate a grid of waypoints within the arena
+  for (let x = -halfS + 5; x < halfS - 5; x += spacing) {
+    for (let z = -halfS + 5; z < halfS - 5; z += spacing) {
+      // Add some randomness to avoid perfect grid
+      const wx = x + (Math.random() - 0.5) * 4;
+      const wz = z + (Math.random() - 0.5) * 4;
+
+      // Check if this point is inside a wall (simple AABB check)
+      let insideWall = false;
+      for (const box of collidableBoxes) {
+        if (wx > box.minX - 1 && wx < box.maxX + 1 &&
+            wz > box.minZ - 1 && wz < box.maxZ + 1) {
+          insideWall = true;
+          break;
+        }
+      }
+      if (!insideWall) {
+        botWaypoints.push({ x: wx, z: wz });
+      }
+    }
+  }
+
+  // Ensure we have at least some waypoints
+  if (botWaypoints.length < 5) {
+    botWaypoints.push(
+      { x: 0, z: 0 },
+      { x: 10, z: 10 },
+      { x: -10, z: -10 },
+      { x: 10, z: -10 },
+      { x: -10, z: 10 }
+    );
+  }
+
+  console.log('Generated ' + botWaypoints.length + ' waypoints for bots');
+}
+
+// ── Create Minecraft-style Blocky Bot ─────────────────────────
+function createBotMesh() {
+  // Build a Minecraft-style blocky humanoid
+  // Body parts: head, body, left arm, right arm, left leg, right leg
+  const group = new THREE.Group();
+
+  // Colors — enemy team red
+  const skinColor = 0xcc8866;    // Skin tone
+  const shirtColor = 0xcc3333;   // Red shirt
+  const pantsColor = 0x333366;   // Dark blue pants
+  const shoeColor = 0x333333;    // Dark shoes
+
+  const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.8 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor, roughness: 0.7 });
+  const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.7 });
+  const shoeMat = new THREE.MeshStandardMaterial({ color: shoeColor, roughness: 0.8 });
+
+  const bw = BOT_CONFIG.bodyWidth;
+  const bh = BOT_CONFIG.bodyHeight;
+  const bd = BOT_CONFIG.bodyDepth;
+  const hs = BOT_CONFIG.headSize;
+  const aw = BOT_CONFIG.armWidth;
+  const ah = BOT_CONFIG.armHeight;
+  const lw = BOT_CONFIG.legWidth;
+  const lh = BOT_CONFIG.legHeight;
+
+  // ── Body (torso) ──
+  const bodyGeo = new THREE.BoxGeometry(bw, bh, bd);
+  const body = new THREE.Mesh(bodyGeo, shirtMat);
+  body.position.y = lh + bh / 2;  // On top of legs
+  body.name = 'bot_body';
+  group.add(body);
+
+  // ── Head ──
+  const headGeo = new THREE.BoxGeometry(hs, hs, hs);
+  const head = new THREE.Mesh(headGeo, skinMat);
+  head.position.y = lh + bh + hs / 2;  // On top of body
+  head.name = 'bot_head';
+  group.add(head);
+
+  // ── Eyes (two small dark boxes on front of head) ──
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+  const eyeGeo = new THREE.BoxGeometry(0.06, 0.06, 0.05);
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.08, lh + bh + hs / 2 + 0.04, -hs / 2 - 0.01);
+  group.add(leftEye);
+  const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+  rightEye.position.set(0.08, lh + bh + hs / 2 + 0.04, -hs / 2 - 0.01);
+  group.add(rightEye);
+
+  // ── Left Arm ──
+  const leftArmGeo = new THREE.BoxGeometry(aw, ah, aw);
+  const leftArm = new THREE.Mesh(leftArmGeo, skinMat);
+  leftArm.position.set(-bw / 2 - aw / 2, lh + bh - ah / 2, 0);
+  leftArm.name = 'bot_left_arm';
+  group.add(leftArm);
+
+  // ── Right Arm ──
+  const rightArmGeo = new THREE.BoxGeometry(aw, ah, aw);
+  const rightArm = new THREE.Mesh(rightArmGeo, skinMat);
+  rightArm.position.set(bw / 2 + aw / 2, lh + bh - ah / 2, 0);
+  rightArm.name = 'bot_right_arm';
+  group.add(rightArm);
+
+  // ── Left Leg ──
+  const leftLegGeo = new THREE.BoxGeometry(lw, lh, lw);
+  const leftLeg = new THREE.Mesh(leftLegGeo, pantsMat);
+  leftLeg.position.set(-bw / 4, lh / 2, 0);
+  leftLeg.name = 'bot_left_leg';
+  group.add(leftLeg);
+
+  // ── Right Leg ──
+  const rightLegGeo = new THREE.BoxGeometry(lw, lh, lw);
+  const rightLeg = new THREE.Mesh(rightLegGeo, pantsMat);
+  rightLeg.position.set(bw / 4, lh / 2, 0);
+  rightLeg.name = 'bot_right_leg';
+  group.add(rightLeg);
+
+  // ── Shoes (small boxes at bottom of legs) ──
+  const shoeGeo = new THREE.BoxGeometry(lw + 0.04, 0.1, lw + 0.06);
+  const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
+  leftShoe.position.set(-bw / 4, 0.05, -0.02);
+  group.add(leftShoe);
+  const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
+  rightShoe.position.set(bw / 4, 0.05, -0.02);
+  group.add(rightShoe);
+
+  // Cache references for animation
+  group.userData.leftArm = leftArm;
+  group.userData.rightArm = rightArm;
+  group.userData.leftLeg = leftLeg;
+  group.userData.rightLeg = rightLeg;
+  group.userData.head = head;
+
+  // Enable shadows
+  group.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  return group;
+}
+
+// ── Spawn a Bot ──────────────────────────────────────────────
+function spawnBot(botIndex) {
+  // Find a random spawn position away from the player
+  let spawnPos = null;
+  const maxAttempts = 20;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const wpIdx = Math.floor(Math.random() * botWaypoints.length);
+    const wp = botWaypoints[wpIdx];
+
+    // Check distance from player
+    const dx = wp.x - camera.position.x;
+    const dz = wp.z - camera.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist > 10) {  // At least 10 units from player
+      spawnPos = { x: wp.x, z: wp.z };
+      break;
+    }
+  }
+
+  // Fallback: use a corner of the arena
+  if (!spawnPos) {
+    const corners = [
+      { x: -20, z: -20 },
+      { x: 20, z: -20 },
+      { x: -20, z: 20 },
+      { x: 20, z: 20 },
+    ];
+    spawnPos = corners[botIndex % corners.length];
+  }
+
+  // Create the Minecraft-style bot mesh
+  const mesh = createBotMesh();
+  mesh.position.set(spawnPos.x, 0, spawnPos.z);
+  mesh.name = 'bot_' + botIndex;
+  scene.add(mesh);
+
+  // Pick a random waypoint as initial patrol target
+  const targetWP = botWaypoints[Math.floor(Math.random() * botWaypoints.length)];
+
+  const bot = {
+    mesh: mesh,
+    index: botIndex,
+    state: 'patrol',    // idle, patrol, chase
+    speed: BOT_CONFIG.speed,
+    position: new THREE.Vector3(spawnPos.x, 0, spawnPos.z),
+    targetWaypoint: targetWP,
+    lastWaypointTime: performance.now() / 1000,
+    facingAngle: Math.random() * Math.PI * 2,
+    walkAnimTime: 0,
+    isStuck: false,
+    stuckCheckTimer: 0,
+    lastPosition: new THREE.Vector3(spawnPos.x, 0, spawnPos.z),
+    isDead: false,
+    deathTime: 0,
+    hp: 100,
+  };
+
+  activeBots.push(bot);
+  return bot;
+}
+
+// ── Initialize All Bots ──────────────────────────────────────
+function initBots() {
+  // Generate waypoints first
+  generateWaypoints();
+
+  // Spawn bots
+  for (let i = 0; i < BOT_CONFIG.count; i++) {
+    spawnBot(i);
+  }
+
+  console.log('Spawned ' + BOT_CONFIG.count + ' bots');
+}
+
+// ── Find Nearest Waypoint to a Position ──────────────────────
+function findNearestWaypoint(x, z) {
+  let nearest = null;
+  let minDist = Infinity;
+
+  for (const wp of botWaypoints) {
+    const dx = wp.x - x;
+    const dz = wp.z - z;
+    const dist = dx * dx + dz * dz;
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = wp;
+    }
+  }
+
+  return nearest;
+}
+
+// ── Find Next Random Waypoint ────────────────────────────────
+function findNextWaypoint(currentX, currentZ) {
+  // Pick a random waypoint, preferring ones not too close
+  const candidates = botWaypoints.filter(wp => {
+    const dx = wp.x - currentX;
+    const dz = wp.z - currentZ;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    return dist > 5 && dist < BOT_CONFIG.patrolRadius * 2;
+  });
+
+  if (candidates.length > 0) {
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  // Fallback: any waypoint
+  return botWaypoints[Math.floor(Math.random() * botWaypoints.length)];
+}
+
+// ── Check if Bot Can Move to Position (Collision) ────────────
+function canBotMoveTo(x, z, botRadius) {
+  for (const box of collidableBoxes) {
+    const closestX = Math.max(box.minX, Math.min(x, box.maxX));
+    const closestZ = Math.max(box.minZ, Math.min(z, box.maxZ));
+
+    // Check Y overlap (bot is at ground level)
+    if (0 + botRadius < box.minY || 0 - botRadius > box.maxY) continue;
+
+    const dx = x - closestX;
+    const dz = z - closestZ;
+    const distSq = dx * dx + dz * dz;
+
+    if (distSq < botRadius * botRadius) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// ── Check if Path is Clear (Raycast ahead) ───────────────────
+function isPathClear(x, z, angle, checkDist) {
+  const dx = -Math.sin(angle) * checkDist;
+  const dz = -Math.cos(angle) * checkDist;
+
+  const targetX = x + dx;
+  const targetZ = z + dz;
+
+  // Simple AABB check along the path
+  const steps = 5;
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const px = x + dx * t;
+    const pz = z + dz * t;
+
+    if (!canBotMoveTo(px, pz, 0.5)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// ── Update Bot AI ────────────────────────────────────────────
+function updateBots(deltaTime) {
+  const now = performance.now() / 1000;
+
+  for (let i = activeBots.length - 1; i >= 0; i--) {
+    const bot = activeBots[i];
+
+    // Handle dead bot respawn
+    if (bot.isDead) {
+      const elapsed = now - bot.deathTime;
+      if (elapsed >= BOT_CONFIG.respawnTime) {
+        respawnBot(bot);
+      }
+      continue;
+    }
+
+    // Get player position
+    const playerX = camera.position.x;
+    const playerZ = camera.position.z;
+    const dx = playerX - bot.position.x;
+    const dz = playerZ - bot.position.z;
+    const distToPlayer = Math.sqrt(dx * dx + dz * dz);
+
+    // ── State Machine ──
+    // Check if player is within detection range
+    if (distToPlayer < BOT_CONFIG.detectionRange && !isPlayerDead) {
+      bot.state = 'chase';
+    } else {
+      bot.state = 'patrol';
+    }
+
+    // ── Stuck Detection ──
+    bot.stuckCheckTimer += deltaTime;
+    if (bot.stuckCheckTimer >= BOT_CONFIG.stuckTimer) {
+      const moved = bot.position.distanceTo(bot.lastPosition);
+      if (moved < 0.5) {
+        bot.isStuck = true;
+      } else {
+        bot.isStuck = false;
+      }
+      bot.lastPosition.copy(bot.position);
+      bot.stuckCheckTimer = 0;
+    }
+
+    // ── Movement ──
+    let targetX, targetZ;
+    let moveSpeed = bot.speed;
+
+    if (bot.state === 'chase') {
+      // Move toward player
+      targetX = playerX;
+      targetZ = playerZ;
+    } else {
+      // Patrol: move toward waypoint
+      if (!bot.targetWaypoint) {
+        bot.targetWaypoint = findNextWaypoint(bot.position.x, bot.position.z);
+      }
+      targetX = bot.targetWaypoint.x;
+      targetZ = bot.targetWaypoint.z;
+
+      // Check if reached waypoint
+      const wpDx = targetX - bot.position.x;
+      const wpDz = targetZ - bot.position.z;
+      const wpDist = Math.sqrt(wpDx * wpDx + wpDz * wpDz);
+      if (wpDist < 2.0) {
+        bot.targetWaypoint = findNextWaypoint(bot.position.x, bot.position.z);
+        bot.lastWaypointTime = now;
+      }
+
+      // If stuck, find a new waypoint
+      if (bot.isStuck) {
+        bot.targetWaypoint = findNearestWaypoint(bot.position.x, bot.position.z);
+        bot.isStuck = false;
+      }
+    }
+
+    // Calculate direction to target
+    const dirX = targetX - bot.position.x;
+    const dirZ = targetZ - bot.position.z;
+    const dirLen = Math.sqrt(dirX * dirX + dirZ * dirZ);
+
+    if (dirLen > 0.5) {
+      const normX = dirX / dirLen;
+      const normZ = dirZ / dirLen;
+
+      // Calculate target facing angle
+      const targetAngle = Math.atan2(-normX, -normZ);
+
+      // Smooth turn toward target
+      let angleDiff = targetAngle - bot.facingAngle;
+      // Normalize angle difference to [-PI, PI]
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+      const turnAmount = BOT_CONFIG.turnSpeed * deltaTime;
+      if (Math.abs(angleDiff) > turnAmount) {
+        bot.facingAngle += Math.sign(angleDiff) * turnAmount;
+      } else {
+        bot.facingAngle = targetAngle;
+      }
+
+      // Check if path ahead is clear
+      const pathClear = isPathClear(bot.position.x, bot.position.z, bot.facingAngle, BOT_CONFIG.raycastCheckDist);
+
+      if (pathClear) {
+        // Move forward in facing direction
+        const moveX = -Math.sin(bot.facingAngle) * moveSpeed * deltaTime;
+        const moveZ = -Math.cos(bot.facingAngle) * moveSpeed * deltaTime;
+
+        const newX = bot.position.x + moveX;
+        const newZ = bot.position.z + moveZ;
+
+        // Collision check for new position
+        if (canBotMoveTo(newX, newZ, CONFIG.playerRadius || 0.5)) {
+          bot.position.x = newX;
+          bot.position.z = newZ;
+        } else {
+          // Try to slide along the wall (move in X or Z only)
+          if (canBotMoveTo(newX, bot.position.z, CONFIG.playerRadius || 0.5)) {
+            bot.position.x = newX;
+          } else if (canBotMoveTo(bot.position.x, newZ, CONFIG.playerRadius || 0.5)) {
+            bot.position.z = newZ;
+          } else {
+            // Completely blocked — turn away
+            bot.facingAngle += (Math.random() > 0.5 ? 1 : -1) * Math.PI / 2;
+          }
+        }
+      } else {
+        // Obstacle ahead — turn away
+        bot.facingAngle += (Math.random() > 0.5 ? 1 : -1) * Math.PI / 3 * deltaTime;
+      }
+    }
+
+    // Keep within arena bounds
+    const halfS = CONFIG.arenaSize / 2 - 1;
+    bot.position.x = Math.max(-halfS, Math.min(halfS, bot.position.x));
+    bot.position.z = Math.max(-halfS, Math.min(halfS, bot.position.z));
+
+    // Update mesh position and rotation
+    bot.mesh.position.copy(bot.position);
+    bot.mesh.rotation.y = bot.facingAngle;
+
+    // ── Walk Animation ──
+    const isMoving = dirLen > 0.5;
+    if (isMoving) {
+      bot.walkAnimTime += deltaTime * moveSpeed * 2;
+      const swing = Math.sin(bot.walkAnimTime) * 0.5;
+
+      // Animate legs
+      const leftLeg = bot.mesh.userData.leftLeg;
+      const rightLeg = bot.mesh.userData.rightLeg;
+      if (leftLeg) leftLeg.rotation.x = swing;
+      if (rightLeg) rightLeg.rotation.x = -swing;
+
+      // Animate arms (opposite to legs)
+      const leftArm = bot.mesh.userData.leftArm;
+      const rightArm = bot.mesh.userData.rightArm;
+      if (leftArm) leftArm.rotation.x = -swing;
+      if (rightArm) rightArm.rotation.x = swing;
+    } else {
+      // Idle: reset animation
+      bot.walkAnimTime = 0;
+      const leftLeg = bot.mesh.userData.leftLeg;
+      const rightLeg = bot.mesh.userData.rightLeg;
+      const leftArm = bot.mesh.userData.leftArm;
+      const rightArm = bot.mesh.userData.rightArm;
+      if (leftLeg) leftLeg.rotation.x = 0;
+      if (rightLeg) rightLeg.rotation.x = 0;
+      if (leftArm) leftArm.rotation.x = 0;
+      if (rightArm) rightArm.rotation.x = 0;
+    }
+  }
+}
+
+// ── Bot Death & Respawn ──────────────────────────────────────
+function damageBot(bot, damage) {
+  if (bot.isDead) return;
+
+  bot.hp -= damage;
+
+  if (bot.hp <= 0) {
+    bot.hp = 0;
+    bot.isDead = true;
+    bot.deathTime = performance.now() / 1000;
+
+    // Hide the bot mesh (make it fall down)
+    bot.mesh.rotation.x = Math.PI / 2;
+    bot.mesh.position.y = 0.3;
+
+    console.log('Bot ' + bot.index + ' killed!');
+  }
+}
+
+function respawnBot(bot) {
+  bot.isDead = false;
+  bot.hp = 100;
+  bot.state = 'patrol';
+
+  // Find a new spawn position
+  let spawnPos = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const wpIdx = Math.floor(Math.random() * botWaypoints.length);
+    const wp = botWaypoints[wpIdx];
+    const dx = wp.x - camera.position.x;
+    const dz = wp.z - camera.position.z;
+    if (Math.sqrt(dx * dx + dz * dz) > 10) {
+      spawnPos = { x: wp.x, z: wp.z };
+      break;
+    }
+  }
+
+  if (!spawnPos) {
+    spawnPos = { x: (Math.random() - 0.5) * 40, z: (Math.random() - 0.5) * 40 };
+  }
+
+  bot.position.set(spawnPos.x, 0, spawnPos.z);
+  bot.mesh.position.copy(bot.position);
+  bot.mesh.rotation.x = 0;
+  bot.mesh.rotation.y = Math.random() * Math.PI * 2;
+  bot.facingAngle = bot.mesh.rotation.y;
+  bot.targetWaypoint = findNextWaypoint(spawnPos.x, spawnPos.z);
+
+  console.log('Bot ' + bot.index + ' respawned');
+}
+
+// ── Check if Bot Was Hit by Player's Shot ────────────────────
+function checkBotHit(raycaster) {
+  for (const bot of activeBots) {
+    if (bot.isDead) continue;
+
+    // Check intersection with bot mesh children
+    const intersects = raycaster.intersectObjects(bot.mesh.children, false);
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+
+      // Determine if headshot
+      const isHeadshot = hit.object.name === 'bot_head';
+
+      // Apply damage (based on weapon damage)
+      return { bot: bot, headshot: isHeadshot, point: hit.point };
+    }
+  }
+  return null;
+}
 
 // ── Tahap 08: Arena Map Builder ────────────────────────────
 function buildArenaMap() {
@@ -6122,6 +6781,7 @@ function animate() {
     checkWeaponPickups();          // Tahap 17: Pickup detection
     updateFallDamage();            // Tahap 19: Fall damage check
   }
+  updateBots(deltaTime);           // Tahap 20: Bot AI update
   updateSmokeClouds(deltaTime); // Tahap 11: Always update (even when dead, for visual)
   updateSmokeOverlay();      // Tahap 11 fix: screen-space smoke overlay
   updateDeathAndRespawn(deltaTime); // Tahap 19: Death/respawn timer
@@ -6203,8 +6863,12 @@ function updateDebugInfo(deltaTime) {
   // Tahap 19: HP info
   const hpInfo = ' | HP: ' + Math.round(playerHP) + '/' + playerMaxHP + (isPlayerDead ? ' [DEAD]' : '');
 
+  // Tahap 20: Bot info
+  const aliveBots = activeBots.filter(b => !b.isDead).length;
+  const botInfo = ' | Bots: ' + aliveBots + '/' + activeBots.length;
+
   debugInfo.innerHTML =
-    'TAHAP 19 — HP & Damage' + armorInfo + hpInfo + '<br>' +
+    'TAHAP 20 — Bot AI' + armorInfo + hpInfo + botInfo + '<br>' +
     'FPS: ' + fps + ' | Speed: ' + speed + ' u/s [' + speedLabel + ']<br>' +
     'Pos: (' + camera.position.x.toFixed(1) + ', ' + camera.position.y.toFixed(1) + ', ' + camera.position.z.toFixed(1) + ')<br>' +
     'Yaw: ' + yawDeg + ' | Pitch: ' + pitchDeg + '<br>' +
@@ -6213,7 +6877,7 @@ function updateDebugInfo(deltaTime) {
     'Weapon: ' + weaponLabel + ammoInfo + ' | Items: ' + weaponCount + '<br>' +
     'Grenade: ' + grenadeInfo + ' | Active: ' + activeGrenades.length + (isGrenadeAiming ? ' [AIMING]' : '') + '<br>' +
     'Keys: ' + (keysPressed.length > 0 ? keysPressed.join('+') : '—') + fistInfo + pistolInfo + shotgunInfo + sniperInfo + '<br>' +
-    'Test: F5=20dmg | F6=Headshot(40dmg) | F7=Kill(100dmg)';
+    'Test: F5=20dmg | F6=Headshot(40dmg) | F7=Kill(100dmg) | Bots: ' + activeBots.length + ' alive';
 }
 
 // ── Entry Point ─────────────────────────────────────────────

@@ -1,5 +1,5 @@
 /* ============================================================
-   style.css — FPS Game Tahap 15 (Shotgun + Smoke Overlay + All Mechanics)
+   style.css — FPS Game Tahap 20 (Bot AI + UI Fix v8)
    ============================================================ */
 
 /* Reset & fullscreen */
@@ -36,60 +36,65 @@ canvas {
   z-index: 10;
 }
 
-/* Debug info top-left */
+/* ── v8: Debug info top-left — compact, collapsible ───────── */
 #debug-info {
   position: fixed;
-  top: 10px;
-  left: 10px;
-  font-size: 14px;
-  line-height: 1.6;
+  top: 8px;
+  left: 8px;
+  font-size: 11px;
+  line-height: 1.4;
   color: #00ff00;
   text-shadow: 0 0 4px rgba(0, 255, 0, 0.5);
   z-index: 20;
   pointer-events: none;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 4px 8px;
+  border-radius: 4px;
+  max-width: 320px;
 }
 
-/* ── Controls Info HUD (bottom-right) ─────────────────────── */
+/* ── Controls Info HUD (bottom-right) — compact ────────────── */
 #controls-info {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
-  font-size: 13px;
-  line-height: 1.8;
+  bottom: 8px;
+  right: 8px;
+  font-size: 11px;
+  line-height: 1.6;
   color: #aaaaaa;
   text-shadow: 0 0 3px rgba(170, 170, 170, 0.3);
   z-index: 20;
   pointer-events: none;
   background: rgba(0, 0, 0, 0.5);
-  padding: 10px 14px;
+  padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 220px;
 }
 
 #controls-info .ctrl-title {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   color: #00ff00;
   letter-spacing: 2px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   text-transform: uppercase;
 }
 
 #controls-info .ctrl-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ctrl-key {
   display: inline-block;
-  min-width: 24px;
+  min-width: 20px;
   text-align: center;
-  padding: 2px 6px;
+  padding: 1px 4px;
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: 3px;
+  font-size: 10px;
   font-weight: bold;
   color: #ffffff;
 }
@@ -241,18 +246,18 @@ canvas {
   left: calc(2px + var(--spread));
 }
 
-/* ── Jump Indicator (bottom-center) ──────────────────────── */
+/* ── Jump Indicator (bottom-center) — compact ────────────── */
 #jump-indicator {
   position: fixed;
-  bottom: 20px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
   pointer-events: none;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: bold;
   letter-spacing: 2px;
-  padding: 6px 16px;
+  padding: 4px 12px;
   border-radius: 6px;
   transition: all 0.15s ease;
 }
@@ -280,15 +285,15 @@ canvas {
 /* ── Crouch Indicator (bottom-center, above jump) ─────────── */
 #crouch-indicator {
   position: fixed;
-  bottom: 50px;
+  bottom: 35px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
   pointer-events: none;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: bold;
   letter-spacing: 2px;
-  padding: 6px 16px;
+  padding: 4px 12px;
   border-radius: 6px;
   transition: all 0.15s ease;
 }
@@ -320,13 +325,13 @@ canvas {
   50% { opacity: 0.7; }
 }
 
-/* ── Stamina Bar (bottom-left) ────────────────────────────── */
+/* ── Stamina Bar (bottom-left) — compact ───────────────────── */
 #stamina-bar {
   position: fixed;
-  bottom: 20px;
-  left: 20px;
-  width: 180px;
-  height: 18px;
+  bottom: 8px;
+  left: 8px;
+  width: 140px;
+  height: 16px;
   z-index: 20;
   pointer-events: none;
   background: rgba(0, 0, 0, 0.6);
@@ -422,12 +427,12 @@ canvas {
 /* ── Tahap 09: Weapon HUD (bottom-right, above controls) ─── */
 #weapon-hud {
   position: fixed;
-  bottom: 160px;
-  right: 20px;
+  bottom: 120px;
+  right: 8px;
   z-index: 20;
   pointer-events: none;
   text-align: right;
-  padding: 8px 14px;
+  padding: 6px 10px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -510,14 +515,14 @@ canvas {
 /* ── Tahap 11: Grenade HUD (bottom-left, above stamina) ──── */
 #grenade-hud {
   position: fixed;
-  bottom: 45px;
-  left: 20px;
+  bottom: 30px;
+  left: 8px;
   z-index: 20;
   pointer-events: none;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
   letter-spacing: 1px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 4px;
   color: #88ff88;
   background: rgba(0, 40, 0, 0.5);
@@ -643,21 +648,21 @@ canvas {
   box-shadow: 0 0 1px 1px rgba(255, 255, 255, 0.3);
 }
 
-/* ── Tahap 18: Armor HUD (top-left, below debug) ─────────── */
+/* ── Tahap 18: Armor HUD (top-left, below debug) — compact ── */
 #armor-hud {
   position: fixed;
-  top: 110px;
-  left: 10px;
+  top: 100px;
+  left: 8px;
   z-index: 20;
   pointer-events: none;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
   letter-spacing: 0.5px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(100, 150, 255, 0.3);
-  min-width: 140px;
+  min-width: 130px;
 }
 
 .armor-title {
@@ -799,13 +804,13 @@ canvas {
   color: #ffcc44;
 }
 
-/* ── Tahap 19: HP Bar (top-left, below armor) ────────────── */
+/* ── Tahap 19: HP Bar (top-left, below armor) — compact ──── */
 #hp-bar {
   position: fixed;
-  top: 200px;
-  left: 10px;
-  width: 180px;
-  height: 18px;
+  top: 185px;
+  left: 8px;
+  width: 130px;
+  height: 16px;
   z-index: 20;
   pointer-events: none;
   background: rgba(0, 0, 0, 0.6);
