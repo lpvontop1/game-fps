@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FPS Game 3D — Tahap 16</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <h1>FPS GAME 3D</h1>
+    <p>Memuat arena...</p>
+  </div>
+
+  <!-- Pointer Lock Prompt -->
+  <div id="lock-prompt">
+    <div class="lock-content">
+      <h2>KLIK UNTUK BERMAIN</h2>
+      <p>Klik untuk mengunci mouse &amp; mulai kontrol</p>
+      <div class="lock-keys">
+        <span class="ctrl-key">W</span><span class="ctrl-key">A</span><span class="ctrl-key">S</span><span class="ctrl-key">D</span> Berjalan &nbsp;&nbsp;
+        <span class="ctrl-key">Shift</span> Lari &nbsp;&nbsp;
+        <span class="ctrl-key">C</span> Jongkok &nbsp;&nbsp;
+        <span class="ctrl-key">Ctrl</span> Merayap &nbsp;&nbsp;
+        <span class="ctrl-key">Space</span> Lompat &nbsp;&nbsp;
+        <span class="ctrl-key">Mouse</span> Lihat &nbsp;&nbsp;
+        <span class="ctrl-key">Klik</span> Tembak &nbsp;&nbsp;
+        <span class="ctrl-key">RMB</span> Scope &nbsp;&nbsp;
+        <span class="ctrl-key">1-6</span> Senjata &nbsp;&nbsp;
+        <span class="ctrl-key">R</span> Reload &nbsp;&nbsp;
+        <span class="ctrl-key">G</span> Granat (hold=aim) &nbsp;&nbsp;
+        <span class="ctrl-key">H</span> Smoke (hold=aim) &nbsp;&nbsp;
+        <span class="ctrl-key">ESC</span> Lepas
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug Info Overlay -->
+  <div id="debug-info"></div>
+
+  <!-- Jump Indicator -->
+  <div id="jump-indicator" class="grounded">GROUNDED</div>
+
+  <!-- Crouch Indicator -->
+  <div id="crouch-indicator" class="standing">STANDING</div>
+
+  <!-- Stamina Bar -->
+  <div id="stamina-bar">
+    <div id="stamina-fill"></div>
+    <span id="stamina-text">100%</span>
+    <span id="stamina-label">STAMINA</span>
+  </div>
+
+  <!-- Controls Info -->
+  <div id="controls-info">
+    <div class="ctrl-title">KONTROL</div>
+    <div class="ctrl-row"><span class="ctrl-key">W</span> Maju</div>
+    <div class="ctrl-row"><span class="ctrl-key">A</span> Kiri</div>
+    <div class="ctrl-row"><span class="ctrl-key">S</span> Mundur</div>
+    <div class="ctrl-row"><span class="ctrl-key">D</span> Kanan</div>
+    <div class="ctrl-row"><span class="ctrl-key">Shift</span> Lari (Sprint)</div>
+    <div class="ctrl-row"><span class="ctrl-key">C</span> Jongkok (Crouch)</div>
+    <div class="ctrl-row"><span class="ctrl-key">Ctrl</span> Merayap (Crawl)</div>
+    <div class="ctrl-row"><span class="ctrl-key">Space</span> Lompat</div>
+    <div class="ctrl-row"><span class="ctrl-key">Mouse</span> Lihat</div>
+    <div class="ctrl-row"><span class="ctrl-key">Klik</span> Tembak</div>
+    <div class="ctrl-row"><span class="ctrl-key">R</span> Reload</div>
+    <div class="ctrl-row"><span class="ctrl-key">G</span> Granat (hold=aim)</div>
+    <div class="ctrl-row"><span class="ctrl-key">H</span> Granat Smoke (hold=aim)</div>
+    <div class="ctrl-row"><span class="ctrl-key">1</span> Tangan Kosong</div>
+    <div class="ctrl-row"><span class="ctrl-key">2</span> Melee</div>
+    <div class="ctrl-row"><span class="ctrl-key">3</span> Pistol</div>
+    <div class="ctrl-row"><span class="ctrl-key">4</span> Rifle</div>
+    <div class="ctrl-row"><span class="ctrl-key">5</span> Shotgun (Q=switch)</div>
+    <div class="ctrl-row"><span class="ctrl-key">6</span> Sniper (Q=switch, RMB=scope)</div>
+    <div class="ctrl-row"><span class="ctrl-key">+</span><span class="ctrl-key">-</span> Sensitivitas</div>
+    <div class="ctrl-row"><span class="ctrl-key">ESC</span> Lepas</div>
+  </div>
+
+  <!-- Crosshair (dynamic 4-line) -->
+  <div id="crosshair">
+    <div class="ch-line ch-top"></div>
+    <div class="ch-line ch-bottom"></div>
+    <div class="ch-line ch-left"></div>
+    <div class="ch-line ch-right"></div>
+    <div class="ch-dot"></div>
+  </div>
+
+  <!-- Sensitivity Indicator -->
+  <div id="sensitivity-indicator">SENS: 0.0020 (30%)</div>
+
+  <!-- Map Info HUD -->
+  <div id="map-info">ARENA 50x50</div>
+
+  <!-- Tahap 09: Weapon HUD (bottom-right above controls) -->
+  <div id="weapon-hud">
+    <div id="weapon-name">Tangan Kosong</div>
+    <div id="weapon-ammo">∞</div>
+    <div id="weapon-slot">[1/6]</div>
+  </div>
+
+  <!-- Tahap 10: Reload indicator -->
+  <div id="reload-indicator">RELOADING...</div>
+
+  <!-- Tahap 10: Hit marker -->
+  <div id="hit-marker">✕</div>
+
+  <!-- Tahap 11: Grenade HUD (bottom-center-left) -->
+  <div id="grenade-hud">G: 2 | H: 1</div>
+
+  <!-- Smoke Overlay (full-screen fog when inside smoke) -->
+  <div id="smoke-overlay"></div>
+
+  <!-- Tahap 16: Sniper Scope Overlay (shown when scoped in) -->
+  <div id="scope-overlay">
+    <div class="scope-circle"></div>
+    <div class="scope-crosshair-h"></div>
+    <div class="scope-crosshair-v"></div>
+    <div class="scope-mil-dot" style="top: 35%"></div>
+    <div class="scope-mil-dot" style="top: 45%"></div>
+    <div class="scope-mil-dot" style="top: 55%"></div>
+    <div class="scope-mil-dot" style="top: 65%"></div>
+  </div>
+
+  <!-- UI Overlay -->
+  <div id="ui-overlay"></div>
+
+  <!-- Three.js via jsDelivr CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script>
+    if (typeof THREE === 'undefined') {
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/three@0.160.0/build/three.min.js';
+      s.onerror = function() {
+        var ls = document.getElementById('loading-screen');
+        if (ls) ls.innerHTML = '<h1 style="color:#ff4444">ERROR</h1><p>Gagal memuat Three.js.</p>';
+      };
+      document.body.appendChild(s);
+    }
+  </script>
+
+  <script src="script.js"></script>
+</body>
+</html>

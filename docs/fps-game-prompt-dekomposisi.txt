@@ -1,0 +1,854 @@
+===============================================================
+  DEKOMPOSISI PROMPT — GAME FPS 3D BERBASIS WEB
+===============================================================
+
+Deskripsi: File ini memecah prompt game FPS 3D berbasis web yang
+besar dan kompleks menjadi tahapan-tahapan kecil yang berurutan.
+Setiap tahap adalah sub-prompt mandiri yang dapat diberikan kepada
+AI agentic satu per satu. Setiap tahap BERTUMPU pada hasil tahap
+sebelumnya, jadi urutan harus diikuti secara strict.
+
+Struktur file:
+- Bagian A: Daftar semua tahapan (overview)
+- Bagian B: Sub-prompt lengkap per tahapan (siap salin-tempel)
+
+===============================================================
+  BAGIAN A — OVERVIEW TAHAPAN
+===============================================================
+
+Tahap 01 — Fondasi Proyek & Scene 3D
+  Setup Three.js, file index.html/style.css/script.js, scene dasar.
+
+Tahap 02 — Kontrol Pemain: Berjalan (WASD)
+  FPS camera + movement WASD di scene yang sudah ada.
+
+Tahap 03 — Mekanik Lompat (Jump)
+  Fisika lompat + gravity dasar.
+
+Tahap 04 — Mekanik Lari (Sprint)
+  Sprint dengan shift, stamina bar opsional.
+
+Tahap 05 — Mekanik Jongkok / Merayap (Crouch/Crawl)
+  Crouch (C) dan crawl, ubah height & speed kamera.
+
+Tahap 06 — Mouse Look / Kamera FPS Pertama
+  Pointer lock, sensitivitas, first-person camera smooth.
+
+Tahap 07 — Collision Detection Dasar
+  Pemain tidak bisa menembus dinding/objek.
+
+Tahap 08 — Map/Arena Minimalis Pertama
+  Maze-like arena sederhana (box geometry, tanpa tekstur).
+
+Tahap 09 — Sistem Senjata — Definisi Data (item.json)
+  Buat item.json: semua senjata, armor, jenis-jenis, stats.
+
+Tahap 10 — Mekanik Menembak (Shoot) — Senjata Utama
+  Raycast shooting, muzzle flash, hit detection.
+
+Tahap 11 — Mekanik Melempar (Throw) — Granat
+  Projectile physics untuk granat, arc, detonasi.
+
+Tahap 12 — Mekanik Pukul Tangan Kosong (Fist/Melee)
+  Tangan kosong bisa memukul, damage rendah.
+
+Tahap 13 — Sistem Senjata — Pisau & Melee Weapons
+  Knife melee attack, swing animation sederhana.
+
+Tahap 14 — Sistem Senjata — Pistol & Variannya
+  Pistol: revolver, glock, deagle; recoil & spread per variant.
+
+Tahap 15 — Sistem Senjata — Shotgun
+  Shotgun: spread pattern, multi-raycast per shot.
+
+Tahap 16 — Sistem Senjata — Sniper Rifle
+  Sniper: scope/zoom, high damage, slow fire rate.
+
+Tahap 17 — Sistem Senjata — Switching & Inventory Pemain
+  HUD senjata, swap weapon, ammo count per weapon.
+
+Tahap 18 — Sistem Armor — Helmet, Vest, Celana, Sepatu
+  Equip armor, defense stat, visual indicator di HUD.
+
+Tahap 19 — Sistem HP & Damage Calculation
+  HP bar, damage = weapon dmg - armor defense, death trigger.
+
+Tahap 20 — Bot AI — Pergerakan & Pathfinding Dasar
+  Bot berjalan di map, patrolling, basic navigation.
+
+Tahap 21 — Bot AI — Menembak & Targeting
+  Bot mengarahkan & menembak ke pemain, accuracy varying.
+
+Tahap 22 — Bot AI — Perilacak Combat Lanjutan
+  Bot crouch, sprint, take cover, throw grenade.
+
+Tahap 23 — Sistem Tim — Team Assignment & Score
+  Team A vs Team B, scoreboard, kill count per team.
+
+Tahap 24 — Mode 1v1 — Duel
+  1 pemain vs 1 bot, arena kecil, win condition.
+
+Tahap 25 — Mode Team vs Team (2v2–5v5)
+  Multi-bot per team, team size configurable, larger arena.
+
+Tahap 26 — Sistem Mata Uang & Mode Beli Senjata
+  Kill = earn currency, buy menu, upgrade weapon mid-game.
+
+Tahap 27 — Mode Loot — Loot Box & Refresh 90s
+  Loot boxes di map, random items, 90s refresh cycle.
+
+Tahap 28 — Mode Loot — Tangan Kosong Awal
+  Start bare-handed, loot to acquire weapons.
+
+Tahap 29 — Mekanik Kematian — Corpse & Lootable Mayat
+  Dead = corpse sprite, lootable by anyone, disappear 30s.
+
+Tahap 30 — Keep Inventory Toggle
+  Option saat new game: keep inventory ON/OFF.
+
+Tahap 31 — Game Selection Screen — Konfigurasi Permainan
+  New game screen: mode, team size, weapon acquisition, keep inv.
+
+Tahap 32 — Main Menu
+  Title screen, buttons: Play, Settings, Quit.
+
+Tahap 33 — Settings Screen
+  Sensitivity, volume, resolution, key bindings.
+
+Tahap 34 — HUD & UI Lengkap
+  HP bar, ammo, currency, crosshair, kill feed, timer, scoreboard.
+
+Tahap 35 — Model Low-Poly — Integrasi Asset Senjata
+  Download/gunakan model 3D low-poly dari situs gratis.
+
+Tahap 36 — Integrasi Final & Polish
+  Semua sistem terhubung, bug fix, performa, final output files.
+
+===============================================================
+  BAGIAN B — SUB-PROMPT LENGKAP PER TAHAPAN
+===============================================================
+
+---------------------------------------------------------------
+TAHAP 01 — Fondasi Proyek & Scene 3D
+---------------------------------------------------------------
+Buat fondasi game FPS 3D berbasis web menggunakan Three.js.
+
+Output: 4 file dasar — index.html, style.css, script.js, item.json
+
+Ketentuan:
+- index.html memuat Three.js via CDN, memuat style.css & script.js
+- style.css: fullscreen canvas tanpa margin, cursor crosshair, font monospace untuk UI
+- script.js: init scene Three.js, camera (PerspectiveCamera), renderer (WebGLRenderer), resize handler, render loop
+- item.json: untuk sekarang isi dengan skeleton kosong: { "weapons": [], "armor": [], "loot": [] }
+- Camera posisi awal: y=1.7 (tinggi manusia), z=5
+- Scene: background warna abu-abu muda (#CCCCCC), 1 ground plane (PlaneGeometry besar, warna #555555)
+- Tidak ada gameplay logic di tahap ini, hanya scene yang render-able
+
+---------------------------------------------------------------
+TAHAP 02 — Kontrol Pemain: Berjalan (WASD)
+---------------------------------------------------------------
+Tambahkan kontrol berjalan pemain FPS menggunakan WASD ke scene yang sudah ada dari tahap 01.
+
+Ketentuan:
+- W = maju, A = kiri, S = mundur, D = kanan (relative ke arah kamera)
+- Kecepatan berjalan: 5 unit/second
+- Gunakan velocity-based movement (smooth, bukan snap)
+- Kamera adalah pemain — posisi kamera = posisi pemain
+- Input handling: keydown/keyup, simpan state di object keys{}
+- Update posisi kamera di render loop berdasarkan keys state
+- Pemain tetap di y=1.7 (tinggi berdiri), tidak bisa naik/turun secara vertical untuk sekarang
+- Pastikan movement relatif ke arah camera look (buat forward/right vector dari camera quaternion)
+
+---------------------------------------------------------------
+TAHAP 03 — Mekanik Lompat (Jump)
+---------------------------------------------------------------
+Tambahkan mekanik lompat (jump) ke pemain yang sudah bisa berjalan dari tahap 02.
+
+Ketentuan:
+- Tombol Space = lompat
+- Fisika: gravity -9.8 unit/s² (world downward = -Y)
+- Pemain punya vertical velocity (velocityY)
+- Saat Space & pemain di ground: velocityY = jumpForce (coba 5 unit/s)
+- Setiap frame: velocityY += gravity * deltaTime; position.y += velocityY * deltaTime
+- Ground level = 1.7 (tinggi berdiri). Saat position.y <= 1.7: pemain di ground, velocityY = 0
+- Pemain tidak bisa lompat lagi saat di udara (isGrounded flag)
+- Smooth: tidak ada jitter saat landing
+- Tambahkan visual indicator kecil di HUD (opsional: "GROUNDED" / "AIRBORNE" text debug)
+
+---------------------------------------------------------------
+TAHAP 04 — Mekanik Lari (Sprint)
+---------------------------------------------------------------
+Tambahkan mekanik lari (sprint) ke pemain yang sudah bisa berjalan & lompat dari tahap 03.
+
+Ketentuan:
+- Tombol Shift (kiri) = sprint
+- Sprint speed: 9 unit/s (walk speed tetap 5)
+- Stamina system: stamina max 100, sprint mengurangi stamina 20/s, recovery 10/s saat tidak sprint
+- Saat stamina = 0: pemain tidak bisa sprint, otomatis kembali ke walk speed
+- Stamina bar ditampilkan di HUD (kecil, bottom-left)
+- Sprint hanya bisa saat di ground (tidak bisa sprint di udara)
+- Movement logic: jika Shift && isGrounded && stamina > 0 → speed = 9, else → speed = 5
+- Stamina recovery juga saat pemain berdiri diam (tidak menekan WASD)
+
+---------------------------------------------------------------
+TAHAP 05 — Mekanik Jongkok / Merayap (Crouch & Crawl)
+---------------------------------------------------------------
+Tambahkan mekanik jongkok (crouch) dan merayap (crawl) ke pemain dari tahap 04.
+
+Ketentuan:
+- Tombol C = toggle crouch (bukan hold, tapi toggle)
+- Crouch: kamera turun dari y=1.7 ke y=0.9, speed = 3 unit/s (lebih lambat)
+- Crawl: jika crouch + tekan C lagi (atau Ctrl) → kamera turun ke y=0.4, speed = 2 unit/s
+- Crouch/crawl: pemain tidak bisa lompat
+- Untuk berdiri kembali: tekan C toggle off → smooth transisi kamera kembali ke y=1.7 (lerp, bukan snap)
+- Transisi smooth: interpolasi position.y antara state (standing ↔ crouch ↔ crawl) dengan lerp factor 0.1 per frame
+- Crouch/crawl bisa sprint? Tidak. Sprint hanya saat standing.
+
+---------------------------------------------------------------
+TAHAP 06 — Mouse Look / Kamera FPS Pertama
+---------------------------------------------------------------
+Tambahkan kontrol kamera FPS (mouse look) ke pemain dari tahap 05.
+
+Ketentuan:
+- Pointer Lock API: klik canvas → lock pointer, ESC → unlock
+- Mouse movement: deltaX = yaw (horizontal rotation), deltaY = pitch (vertical rotation)
+- Sensitivitas mouse: 0.002 radian per pixel (default, bisa diubah di settings nanti)
+- Yaw: rotasi kamera di Y-axis (camera.rotation.y atau euler y)
+- Pitch: rotasi di local X-axis, clamp antara -89° dan +89° (tidak bisa lihat lebih dari vertical)
+- WASD movement harus relatif ke arah yaw (forward = arah kamera, bukan world Z)
+- Crosshair ditampilkan di tengah canvas (CSS: position fixed, small dot or plus sign)
+- Mouse look harus smooth, tidak ada jitter
+
+---------------------------------------------------------------
+TAHAP 07 — Collision Detection Dasar
+---------------------------------------------------------------
+Tambahkan collision detection agar pemain tidak bisa menembus dinding/objek di scene dari tahap 06.
+
+Ketentuan:
+- Implementasi: ray-based collision atau AABB collision
+- Pemain punya bounding box (radius 0.5, height sesuai state: 1.7/0.9/0.4)
+- Sebelum update posisi, cek apakah posisi baru akan overlap dengan obstacle
+- Obstacle: semua mesh di scene yang memiliki tag "collidable" (userData.collidable = true)
+- Jika collision: pemain slide (keep component yang tidak collide, blok component yang collide)
+- Ground plane tidak collidable (pemain bisa berjalan di atas)
+- Tambahkan 2-3 box obstacle ke scene untuk testing (dinding box, warna #888888)
+- Visual: pemain tidak bisa menembus dinding, berjalan mengikuti permukaan dinding (wall slide)
+
+---------------------------------------------------------------
+TAHAP 08 — Map/Arena Minimalis Pertama
+---------------------------------------------------------------
+Buat map/arena game minimalis maze-like untuk scene dari tahap 07.
+
+Ketentuan:
+- Map: maze-like arena, bukan pure maze. Campuran: area terbuka + corridor + ruangan
+- Ukuran: kira-kira 50x50 unit
+- Material: hanya warna solid (MeshStandardMaterial tanpa texture), warna-warna abu-abu & krem
+- Dinding: BoxGeometry, height 3 unit, thickness 0.5
+- Floor: satu plane besar, warna #555555
+- Semua mesh collidable (userData.collidable = true)
+- Layout: buat secara procedural atau manual, minimal ada:
+  - 1 area terbuka besar di tengah (open arena ~15x15)
+  - 4 corridor menghubungkan area terbuka
+  - 3-4 ruangan kecil (~5x5) di corners
+  - 2 choke point (narrow passage ~2 unit wide)
+- Lighting: ambient light + 1 directional light (sun-like, slight shadow)
+- Tidak ada texture yang memberatkan performa
+
+---------------------------------------------------------------
+TAHAP 09 — Sistem Senjata — Definisi Data (item.json)
+---------------------------------------------------------------
+Isi item.json dengan definisi lengkap semua senjata, armor, dan loot yang akan digunakan di game.
+
+Ketentuan item.json structure:
+{
+  "weapons": {
+    "melee": {
+      "fist": { "name": "Tangan Kosong", "type": "fist", "damage": 5, "range": 1.5, "rate": 2, "description": "Pukulan tangan kosong, damage rendah" },
+      "knife": { "name": "Pisau", "type": "melee", "damage": 25, "range": 2, "rate": 1.5, "description": "Pisau tactical" }
+    },
+    "pistol": {
+      "revolver": { "name": "Revolver", "type": "pistol", "damage": 40, "range": 50, "rate": 1.0, "magazine": 6, "spread": 0.02, "description": "Revolver klasik, damage tinggi, lambat" },
+      "glock": { "name": "Glock-17", "type": "pistol", "damage": 20, "range": 40, "rate": 3.0, "magazine": 17, "spread": 0.03, "description": "Pistol standar, cepat" },
+      "deagle": { "name": "Desert Eagle", "type": "pistol", "damage": 55, "range": 60, "rate": 0.8, "magazine": 7, "spread": 0.04, "description": "Pistol berat, damage sangat tinggi" }
+    },
+    "shotgun": {
+      "pump_shotgun": { "name": "Pump Shotgun", "type": "shotgun", "damage": 15, "pellets": 8, "range": 20, "rate": 0.7, "magazine": 6, "spread": 0.08, "description": "Shotgun pump-action, 8 pellets" },
+      "auto_shotgun": { "name": "Auto Shotgun", "type": "shotgun", "damage": 12, "pellets": 6, "range": 15, "rate": 2.0, "magazine": 10, "spread": 0.10, "description": "Shotgun semi-auto, cepat tapi lebih spread" }
+    },
+    "sniper": {
+      "bolt_sniper": { "name": "Bolt Sniper", "type": "sniper", "damage": 90, "range": 200, "rate": 0.5, "magazine": 5, "spread": 0.005, "description": "Sniper bolt-action, damage extrem, peluru tepat" },
+      "semi_sniper": { "name": "Semi-Auto Sniper", "type": "sniper", "damage": 70, "range": 150, "rate": 1.0, "magazine": 10, "spread": 0.01, "description": "Sniper semi-auto, lebih cepat" }
+    },
+    "rifle": {
+      "assault_rifle": { "name": "Assault Rifle", "type": "rifle", "damage": 25, "range": 80, "rate": 5.0, "magazine": 30, "spread": 0.04, "description": "Rifle standar, versatile" },
+      "smg": { "name": "SMG", "type": "rifle", "damage": 18, "range": 50, "rate": 8.0, "magazine": 35, "spread": 0.06, "description": "Sub machine gun, cepat tapi damage rendah" }
+    },
+    "grenade": {
+      "frag_grenade": { "name": "Frag Grenade", "type": "grenade", "damage": 80, "radius": 8, "throwRange": 30, "description": "Granat fragmentasi" },
+      "smoke_grenade": { "name": "Smoke Grenade", "type": "grenade", "damage": 0, "radius": 10, "throwRange": 25, "duration": 15, "description": "Granat asap, coverage area" }
+    }
+  },
+  "armor": {
+    "helmet": [
+      { "id": "helmet_light", "name": "Helmet Light", "defense": 10, "slot": "helmet", "description": "Helmet ringan, +10 defense" },
+      { "id": "helmet_medium", "name": "Helmet Medium", "defense": 25, "slot": "helmet", "description": "Helmet medium, +25 defense" },
+      { "id": "helmet_heavy", "name": "Helmet Heavy", "defense": 50, "slot": "helmet", "description": "Helmet berat, +50 defense" }
+    ],
+    "vest": [
+      { "id": "vest_light", "name": "Vest Light", "defense": 15, "slot": "vest", "description": "Vest ringan, +15 defense" },
+      { "id": "vest_medium", "name": "Vest Medium", "defense": 30, "slot": "vest", "description": "Vest medium, +30 defense" },
+      { "id": "vest_heavy", "name": "Vest Heavy", "defense": 60, "slot": "vest", "description": "Vest berat, +60 defense" }
+    ],
+    "pants": [
+      { "id": "pants_light", "name": "Pants Light", "defense": 8, "slot": "pants", "description": "Celana ringan, +8 defense" },
+      { "id": "pants_medium", "name": "Pants Medium", "defense": 20, "slot": "pants", "description": "Celana medium, +20 defense" },
+      { "id": "pants_heavy", "name": "Pants Heavy", "defense": 40, "slot": "pants", "description": "Celana berat, +40 defense" }
+    ],
+    "shoes": [
+      { "id": "shoes_light", "name": "Shoes Light", "defense": 5, "slot": "shoes", "speedBonus": 0.5, "description": "Sepatu ringan, +5 defense, +0.5 speed" },
+      { "id": "shoes_medium", "name": "Shoes Medium", "defense": 12, "slot": "shoes", "description": "Sepatu medium, +12 defense" },
+      { "id": "shoes_heavy", "name": "Shoes Heavy", "defense": 25, "slot": "shoes", "speedPenalty": -1, "description": "Sepatu berat, +25 defense, -1 speed" }
+    ]
+  },
+  "loot": {
+    "lootRefreshInterval": 90,
+    "corpseDisappearTime": 30,
+    "lootTableWeights": {
+      "pistol": 40,
+      "rifle": 25,
+      "shotgun": 15,
+      "sniper": 5,
+      "grenade": 10,
+      "armor": 20,
+      "ammo": 30
+    }
+  }
+}
+
+Semua data harus konsisten dan bisa di-load oleh script.js (data diatas merupakah yang wajib dimasukkan, jika ada senjata lain, diperbolehkan).
+
+---------------------------------------------------------------
+TAHAP 10 — Mekanik Menembak (Shoot) — Senjata Utama
+---------------------------------------------------------------
+Tambahkan mekanik menembak dasar (raycast shooting) ke pemain dari tahap 08, menggunakan data dari item.json tahap 09.
+
+Ketentuan:
+- Tombol klik kiri mouse = shoot
+- Weapon saat ini: pistol (glock default di mode buy)
+- Raycast dari kamera posisi ke arah kamera look direction
+- Raycaster: Three.js Raycaster, set dari camera.position & camera.getWorldDirection()
+- Hit detection: intersectObjects dengan semua objek collidable + entity (bot/player)
+- Muzzle flash: small sphere/light yang muncul 0.1s di depan kamera saat shoot
+- Rate of fire: mengikuti data item.json (glock.rate = 3.0 shots/s)
+- Spread: offset random arah raycast sesuai spread value di item.json
+- Magazine & ammo: track currentAmmo, auto-reload saat habis (reload time 2s)
+- HUD: tampilkan nama senjata + ammo count (top-right atau bottom-right)
+
+---------------------------------------------------------------
+TAHAP 11 — Mekanik Melempar (Throw) — Granat
+---------------------------------------------------------------
+Tambahkan mekanik melempar granat ke pemain dari tahap 10, menggunakan data grenade dari item.json.
+
+Ketentuan:
+- Tombol G = melempar granat (jika punya granat di inventory)
+- Projectile physics: granat mengikuti arc (parabolic trajectory)
+  - Initial velocity: forward direction + upward component (~15 unit/s forward, ~8 unit/s up)
+  - Gravity: -9.8 pada Y axis
+  - Granat berputar saat di udara (rotation visual)
+- Visual: SphereGeometry kecil, warna hijau (#44AA44), emissive slight
+- Detonation: saat granat hit ground/obstacle atau timer 3s
+  - Frag grenade: damage semua entity dalam radius (item.json: radius=8, damage=80)
+  - Damage berkurang linear dari center ke edge radius
+  - Smoke grenade: buat volume asap (sekelompok sphere semi-transparent) selama duration
+- Grenade count: pemain punya grenade inventory (max 2 frag, 1 smoke default)
+- HUD: tampilkan grenade count
+
+---------------------------------------------------------------
+TAHAP 12 — Mekanik Pukul Tangan Kosong (Fist/Melee)
+---------------------------------------------------------------
+Tambahkan mekanik pukulan tangan kosong ke pemain dari tahap 11, menggunakan data fist dari item.json.
+
+Ketentuan:
+- Jika pemain tidak memegang senjata (weapon slot = null atau "fist"):
+  - Tombol klik kiri = pukul (fist attack)
+- Fist attack: melee range, damage 5 (sesuai item.json)
+- Rate: 2 punch per second
+- Visual: tangan sederhana (BoxGeometry kecil, warna skin-tone) muncul di view saat punch
+  - Animasi punch: lerp tangan maju 0.3 unit, kembali 0.2s
+- Melee hit detection: raycast range pendek (1.5 unit) atau sphere overlap di depan pemain
+- Fist tidak bisa digunakan saat memegang senjata (senjata overriding fist)
+
+---------------------------------------------------------------
+TAHAP 13 — Sistem Senjata — Pisau & Melee Weapons
+---------------------------------------------------------------
+Tambahkan pisau (knife) sebagai senjata melee ke pemain dari tahap 12, menggunakan data knife dari item.json.
+
+Ketentuan:
+- Pisau: slot weapon melee, damage 25, range 2 unit, rate 1.5/s
+- Switch weapon: tombol 1 = fist, tombol 2 = knife (number keys untuk weapon slot)
+- Visual pisau: simple BoxGeometry (flat blade shape), warna silver/gray, muncul di view saat equipped
+  - Swing animation: lerp rotation pisau 45° dan kembali
+- Knife melee hit: raycast range 2 unit, damage 25 ke target
+- Knife bisa digunakan saat dekat target (melee range)
+- HUD update: tampilkan weapon icon + name saat equipped
+
+---------------------------------------------------------------
+TAHAP 14 — Sistem Senjata — Pistol & Variannya
+---------------------------------------------------------------
+Tambahkan semua variant pistol (revolver, glock, deagle) ke sistem senjata dari tahap 13.
+
+Ketentuan:
+- 3 variant pistol dari item.json: revolver, glock, deagle
+- Masing-masing punya stats berbeda (damage, rate, magazine, spread)
+- Visual per pistol: model sederhana (BoxGeometry组合asi), ukuran berbeda:
+  - Revolver: lebih besar, barrel pendek
+  - Glock: standar, barrel medium
+  - Deagle: besar, barrel panjang
+- Recoil visual: kamera shake sedikit saat shoot (pitch kick + recover)
+  - Recoil amount berbeda per pistol: deagle recoil besar, glock kecil
+- Weapon switching: angka 3 = pistol slot, sub-switch dengan tombol Q atau scroll
+- Ammo per variant mengikuti magazine size di item.json
+
+---------------------------------------------------------------
+TAHAP 15 — Sistem Senjata — Shotgun
+---------------------------------------------------------------
+Tambahkan shotgun (pump & auto) ke sistem senjata dari tahap 14.
+
+Ketentuan:
+- 2 variant shotgun dari item.json: pump_shotgun, auto_shotgun
+- Shotgun mechanics: multi-raycast per shot (pellets)
+  - Pump: 8 pellets, auto: 6 pellets
+  - Setiap pellet adalah raycast independent dengan random spread dalam cone
+- Damage per pellet mengikuti item.json (pump: 15x8 max 120, auto: 12x6 max 72)
+- Range pendek: damage dropoff setelah 20 unit
+- Rate: pump 0.7/s, auto 2.0/s
+- Visual: model lebih besar, barrel wide
+- Weapon slot: tombol 4 = shotgun
+
+---------------------------------------------------------------
+TAHAP 16 — Sistem Senjata — Sniper Rifle
+---------------------------------------------------------------
+Tambahkan sniper rifle (bolt & semi-auto) ke sistem senjata dari tahap 15.
+
+Ketentuan:
+- 2 variant sniper dari item.json: bolt_sniper, semi_sniper
+- Sniper mechanics:
+  - Scope/zoom: tombol klik kanan hold = zoom (camera FOV berubah dari 75 ke 20)
+  - Spread sangat rendah (bolt: 0.005, semi: 0.01)
+  - Damage tinggi (bolt: 90, semi: 70)
+  - Rate rendah (bolt: 0.5/s, semi: 1.0/s)
+- Scope visual: saat zoom, overlay scope (CSS: circle border, crosshair fine)
+- FOV transition: lerp dari 75 → 20 saat klik kanan, kembali saat release
+- Weapon slot: tombol 5 = sniper
+
+---------------------------------------------------------------
+TAHAP 17 — Sistem Senjata — Switching & Inventory Pemain
+---------------------------------------------------------------
+Buat sistem weapon switching & inventory lengkap ke pemain dari tahap 16.
+
+Ketentuan:
+- Weapon slots: 1=fist, 2=knife, 3=pistol, 4=shotgun, 5=sniper, 6=rifle, G=grenade
+- Switching: number keys (1-6) untuk instant switch, Q untuk quick-switch ke previous
+- Inventory: array weapons[], masing-masing slot punya weapon object atau null
+- Ammo system: track ammo per weapon (currentAmmo, reserveAmmo)
+- Reload: tombol R = manual reload, auto-reload saat magazine habis
+- HUD weapon panel: tampilkan weapon slots, current weapon highlighted, ammo count
+- Weapon switch animasi: brief lower weapon + raise new weapon (lerp position y 0.1s)
+- Drop weapon: tombol Drop (misal H) → weapon jatuh ke ground sebagai pickup item
+
+---------------------------------------------------------------
+TAHAP 18 — Sistem Armor — Helmet, Vest, Celana, Sepatu
+---------------------------------------------------------------
+Buat sistem armor (equip & stats) ke pemain dari tahap 17, menggunakan data armor dari item.json.
+
+Ketentuan:
+- 4 armor slots: helmet, vest, pants, shoes
+- Equip: pemain bisa equip armor ke slot masing-masing
+- Defense: setiap armor punya defense value (sesuai item.json)
+- Total defense = sum of all equipped armor defense values
+- Speed bonus/penalty dari shoes (shoes_light: +0.5 speed, shoes_heavy: -1 speed)
+- Armor visual: saat equipped, tampilkan indicator di HUD (icon per slot, defense number)
+- Equip method: sementara manual (tombol I = inventory screen, drag armor ke slot) — bisa simplified
+- Armor tidak mengurangi movement capability selain speed penalty dari shoes
+
+---------------------------------------------------------------
+TAHAP 19 — Sistem HP & Damage Calculation
+---------------------------------------------------------------
+Buat sistem HP & damage calculation lengkap ke game dari tahap 18.
+
+Ketentuan:
+- Pemain HP: max 100
+- Damage calculation: incoming_damage - total_defense = effective_damage
+  - Minimum effective_damage = 1 (selalu ada damage minimal)
+- Contoh: glock damage 20, pemain total defense 40 → effective = 20-40 = clamped to 1
+- Sniper bolt 90 damage vs defense 40 → effective = 50
+- Headshot multiplier: 2x damage (raycast hit ke area head entity)
+- HP bar: tampilkan di HUD (bar merah hijau, top-left)
+- Death: saat HP <= 0, trigger death event (untuk sekarang: pemain respawn di spawn point setelah 3s)
+- Damage flash: screen flash merah 0.2s saat hit
+- Heal: tidak ada heal mechanic untuk sekarang (mungkin ditambah nanti)
+
+---------------------------------------------------------------
+TAHAP 20 — Bot AI — Pergerakan & Pathfinding Dasar
+---------------------------------------------------------------
+Buat bot AI dasar yang bisa bergerak di map dari tahap 19.
+
+Ketentuan:
+- Bot: entitas di scene (Mesh = BoxGeometry kecil, warna merah untuk enemy team)
+- Bot position: sama seperti pemain (y=1.7 berdiri)
+- Bot punya movement logic: walk, stop, turn
+- Simple pathfinding: waypoint-based
+  - Buat beberapa waypoint di map (positions yang terhubung)
+  - Bot bergerak dari waypoint ke waypoint berikutnya
+  - Bot bisa menghindari obstacle dasar (raycast ahead, turn jika blocked)
+- Bot speed: 3 unit/s (lebih lambat dari pemain)
+- Bot state: idle, patrol, chase (untuk sekarang: patrol default)
+- Bot tidak bisa menembus dinding (sama seperti collision detection pemain)
+
+---------------------------------------------------------------
+TAHAP 21 — Bot AI — Menembak & Targeting
+---------------------------------------------------------------
+Tambahkan kemampuan menembak ke bot AI dari tahap 20.
+
+Ketentuan:
+- Bot bisa menembak ke pemain
+- Targeting: bot melihat arah pemain, jika dalam range sight (60 unit) & angle (90° cone)
+- Shooting: raycast dari bot ke pemain, hit = damage ke pemain
+- Bot weapon: glock default (damage 20, rate 3.0)
+- Accuracy: bot tidak 100% akurat
+  - Easy bot: spread 0.08, hit chance ~40%
+  - Medium bot: spread 0.04, hit chance ~60%
+  - Hard bot: spread 0.02, hit chance ~80%
+- Bot shoot rate: mengikuti weapon rate (glock 3.0/s) tapi dengan delay random ±0.3s
+- Bot hanya menembak saat bisa melihat pemain (line of sight, no obstacle blocking)
+- Muzzle flash visual di bot saat shoot (sama seperti pemain)
+- Bot switch state: idle → patrol → chase (saat melihat pemain) → shoot (saat dalam range)
+
+---------------------------------------------------------------
+TAHAP 22 — Bot AI — Perilacak Combat Lanjutan
+---------------------------------------------------------------
+Tambahkan perilaku combat lanjutan ke bot AI dari tahap 21.
+
+Ketentuan:
+- Bot crouch: saat HP rendah (<30), bot crouch untuk reduce profile
+- Bot sprint: saat chase & jarak > 20 unit ke target, bot sprint (speed 7)
+- Bot take cover: saat HP < 20, bot mencari posisi tersembunyi (raycast untuk menemukan dinding blocking line-of-sight ke pemain)
+- Bot throw grenade: jika punya grenade & pemain dalam cluster area, bot throw grenade
+- Bot melee: jika pemain dalam range 2 unit, bot switch to knife/fist
+- Bot weapon switching: bot bisa switch weapon sesuai situasi
+  - Jarak pendek → knife/shotgun
+  - Jarak medium → pistol/rifle
+  - Jarak jauh → sniper
+- Bot retreat: saat outnumbered (3+ enemy visible), bot retreat ke waypoint terdekat
+- State machine lengkap: idle, patrol, chase, shoot, crouch_shoot, take_cover, melee, retreat
+
+---------------------------------------------------------------
+TAHAP 23 — Sistem Tim — Team Assignment & Score
+---------------------------------------------------------------
+Buat sistem tim (team assignment & score) ke game dari tahap 22.
+
+Ketentuan:
+- 2 team: Team A (warna biru) dan Team B (warna merah)
+- Pemain selalu Team A
+- Bot selalu Team B (untuk sekarang)
+- Team visual: mesh warna berbeda (biru vs merah)
+- Friendly fire: OFF (teman tidak bisa damage teman)
+- Scoreboard: kill count per team, tampilkan di HUD
+- Kill: +1 score untuk team yang kill, -1 death count untuk team yang death
+- Round: tidak ada round system untuk sekarang (continuous play)
+- Team chat marker: nama pemain/bot di HUD dengan warna team
+
+---------------------------------------------------------------
+TAHAP 24 — Mode 1v1 — Duel
+---------------------------------------------------------------
+Buat mode permainan 1v1 (duel) ke game dari tahap 23.
+
+Ketentuan:
+- 1 pemain (Team A) vs 1 bot (Team B)
+- Arena: area kecil di map (~15x15 unit area terbuka)
+- Win condition: pemain yang pertama mencapai 5 kill wins
+- Death: respawn setelah 3s di spawn point team
+- Spawn points: 2 spawn point (1 per team), di opposite corners
+- Score: duel score display di HUD (top-center: "You 3 — Bot 2")
+- Match end: saat salah satu mencapai 5 kill → "Victory/Defeat" screen
+- Weapon: start dengan glock (mode buy untuk sekarang)
+
+---------------------------------------------------------------
+TAHAP 25 — Mode Team vs Team (2v2–5v5)
+---------------------------------------------------------------
+Buat mode team vs team (multi-bot per team) ke game dari tahap 24.
+
+Ketentuan:
+- Team size configurable: 2v2, 3v3, 4v4, 5v5
+- Team A: 1 pemain + (size-1) bot ally (warna biru)
+- Team B: size bot enemy (warna merah)
+- Bot ally: AI sama seperti enemy, tapi targeting enemy team
+- Win condition: team yang pertama mencapai 25 total kill wins (atau configurable)
+- Spawn points: 2 spawn areas (1 per team), di opposite sides of map
+- Spawn: respawn setelah 3s di spawn area, random position dalam area
+- Score: team score display di HUD (top-center: "Blue 15 — Red 12")
+- Match end: Victory/Defeat screen
+- Seluruh map digunakan (bukan area kecil seperti 1v1)
+
+---------------------------------------------------------------
+TAHAP 26 — Sistem Mata Uang & Mode Beli Senjata
+---------------------------------------------------------------
+Buat sistem mata uang & mode beli senjata (buy mode) ke game dari tahap 25.
+
+Ketentuan:
+- Mata uang: "Credits" (symbol: ₡)
+- Kill reward: +100 credits per kill enemy
+- Headshot bonus: +50 credits extra
+- Buy menu: tombol B = open buy menu overlay
+  - List semua weapon berdasar category (pistol, shotgun, rifle, sniper, melee, grenade)
+  - Setiap weapon punya price:
+    - Fist: free, Knife: 200, Glock: 300, Revolver: 500, Deagle: 800
+    - Pump Shotgun: 700, Auto Shotgun: 1000
+    - Assault Rifle: 600, SMG: 400
+    - Bolt Sniper: 1200, Semi-Auto Sniper: 900
+    - Frag Grenade: 300, Smoke Grenade: 200
+  - Armor price: Light 200-300, Medium 400-500, Heavy 800-1000
+- Buy menu UI: CSS overlay, grid layout, weapon cards dengan price
+- Saat buy: weapon langsung equipped ke slot, ammo full
+- Start weapon: glock default + 1 frag grenade
+- Buy hanya bisa saat alive (tidak saat dead/respawn)
+
+---------------------------------------------------------------
+TAHAP 27 — Mode Loot — Loot Box & Refresh 90s
+---------------------------------------------------------------
+Buat mode loot (loot boxes di map) ke game dari tahap 26.
+
+Ketentuan:
+- Loot box: mesh visual (BoxGeometry kecil, warna kuning/orange, emissive glow)
+- Posisi: tersebar di map (~8-10 loot boxes di lokasi strategic)
+- Isi loot box: random weapon/armor/ammo berdasar lootTableWeights di item.json
+- Pickup: pemain/bot berjalan ke loot box → auto-pickup ( atau tekan E)
+  - Weapon: langsung ke slot yang sesuai (replace jika sudah ada)
+  - Armor: langsung equip ke slot (replace jika sudah ada yang lebih rendah)
+  - Ammo: tambah reserveAmmo weapon yang sesuai
+- Loot box visual: saat ada isi → glowing box, saat kosong → gray box
+- Refresh: setiap 90 detik, semua loot box refresh isinya
+  - Isi yang belum diambil → di-replace dengan random baru
+  - Isi yang sudah diambil → di-refill dengan random baru
+- HUD: indicator loot box terdekat (arah + jarak)
+
+---------------------------------------------------------------
+TAHAP 28 — Mode Loot — Tangan Kosong Awal
+---------------------------------------------------------------
+Buat mode loot dimana pemain dimulai dengan tangan kosong ke game dari tahap 27.
+
+Ketentuan:
+- Weapon acquisition mode: "Buy Mode" (tahap 26) vs "Loot Mode" (tahap ini)
+- Loot Mode: pemain mulai dengan HANYA fist (tangan kosong)
+  - Tidak ada credits, tidak ada buy menu
+  - Semua weapon acquisition hanya dari loot box pickup
+- Loot Mode start: no weapon, no armor, no grenade
+- Tangan kosong bisa membunuh (fist damage 5), tapi sangat sulit
+- Loot box lebih banyak di Loot Mode (~12-15 boxes) karena pemain butuh lebih banyak source
+- Loot Mode refresh tetap 90s
+- Bot di Loot Mode: juga mulai tangan kosong, AI pickup loot box saat patrol
+- Mode selection: buy vs loot dipilih saat new game (tahap 31)
+
+---------------------------------------------------------------
+TAHAP 29 — Mekanik Kematian — Corpse & Lootable Mayat
+---------------------------------------------------------------
+Buat mekanik kematian lengkap (corpse, lootable, disappear) ke game dari tahap 28.
+
+Ketentuan:
+- Saat entity (pemain/bot) mati:
+  - Entity mesh berubah menjadi "corpse" visual:
+    - Flat BoxGeometry di ground (simulasi mayat), warna sesuai team tapi opacity reduced
+    - Corpse rotation: mengikuti arah entity saat death
+  - Corpse punya inventory: semua weapon & armor yang entity punya saat death
+  - Corpse bisa di-loot oleh ANY entity (tim sendiri maupun tim lawan)
+    - Tekan E di dekat corpse (range 2 unit) → loot menu popup
+    - Loot menu: tampilkan items di corpse, pilih yang mau diambil
+  - Corpse disappear: setelah 30 detik, corpse menghilang (mesh dihapus dari scene)
+    - Items yang tidak di-loot juga hilang bersama corpse
+- Keep Inventory OFF (default): pemain respawn dengan start weapon saja (glock di buy mode, fist di loot mode)
+- Keep Inventory ON: pemain respawn dengan semua weapon & armor yang punya saat death
+  - (Keep Inventory toggle di tahap 30)
+
+---------------------------------------------------------------
+TAHAP 30 — Keep Inventory Toggle
+---------------------------------------------------------------
+Tambahkan toggle Keep Inventory ke game dari tahap 29.
+
+Ketentuan:
+- Keep Inventory: option saat new game
+  - ON: pemain respawn dengan semua weapon & armor dari sebelum death
+  - OFF: pemain respawn dengan start weapon only (glock/fist sesuai mode)
+- Implementasi:
+  - Saat death: jika keepInventory = true → save inventory ke respawnInventory[]
+  - Saat respawn: restore inventory dari respawnInventory[]
+  - Saat death: jika keepInventory = false → reset inventory ke start loadout
+- Keep Inventory tidak berpengaruh pada corpse lootability (corpse tetap ada & bisa di-loot)
+  - Tapi: jika keepInventory ON, corpse tidak punya inventory pemain (karena pemain keep item)
+  - Jika keepInventory OFF, corpse punya full inventory pemain
+- HUD indicator: tampilkan "Keep Inv: ON/OFF" di match info
+
+---------------------------------------------------------------
+TAHAP 31 — Game Selection Screen — Konfigurasi Permainan
+---------------------------------------------------------------
+Buat game selection screen (new game configuration) ke game dari tahap 30.
+
+Ketentuan:
+- Screen: overlay HTML/CSS (di atas canvas Three.js)
+- Layout: form-style, clean, dark background
+- Options yang bisa dipilih:
+  1. Game Mode: 1v1 / Team vs Team
+  2. Team Size (hanya jika Team vs Team): 2v2 / 3v3 / 4v4 / 5v5
+  3. Weapon Acquisition: Buy Mode / Loot Mode
+  4. Keep Inventory: ON / OFF
+  5. Bot Difficulty: Easy / Medium / Hard
+- Setiap option: button group atau dropdown, selected state visual (highlighted)
+- Start Game button: konfirmasi semua options, init game dengan konfigurasi
+- Back button: kembali ke main menu
+- Game init: setelah Start, reset semua state (HP, inventory, score, spawn entities sesuai config)
+- Config disimpan sebagai gameState object
+
+---------------------------------------------------------------
+TAHAP 32 — Main Menu
+---------------------------------------------------------------
+Buat main menu screen ke game dari tahap 31.
+
+Ketentuan:
+- Screen: full overlay HTML/CSS (di atas canvas, canvas pause saat menu)
+- Layout: title di atas, button menu di center
+- Title: "FPS ARENA" (atau nama game yang cocok), font besar, bold
+- Buttons:
+  - "PLAY" → navigate ke Game Selection Screen (tahap 31)
+  - "SETTINGS" → navigate ke Settings Screen (tahap 33)
+  - "QUIT" → tidak bisa quit di web, jadi menjadi "CLOSE" atau redirect
+- Style: dark theme, neon accent (cyan atau orange), minimalist
+- Background: canvas scene yang tetap render tapi pause (camera static, no movement)
+- Animasi: subtle — title fade-in, buttons slide-in
+- Responsive: layout adjust untuk different screen sizes
+
+---------------------------------------------------------------
+TAHAP 33 — Settings Screen
+---------------------------------------------------------------
+Buat settings screen ke game dari tahap 32.
+
+Ketentuan:
+- Screen: overlay HTML/CSS
+- Settings yang bisa diubah:
+  1. Mouse Sensitivity: slider (0.001 – 0.01), default 0.002
+  2. Volume (Sound): slider (0 – 100) — untuk sekarang placeholder, audio belum ada
+  3. Resolution / Quality: Low / Medium / High (adjust pixel ratio & shadows)
+  4. Key Bindings: tampilkan current bindings, allow rebind (click key → press new key)
+     - WASD, Shift, C, Ctrl, Space, R, B, G, E, 1-6, Q, mouse buttons
+  5. Crosshair Style: dot / plus / circle / custom
+  6. Crosshair Color: white / red / green / cyan
+- Setiap setting: immediate apply (tidak butuh save button, auto-save ke localStorage)
+- Back button: kembali ke Main Menu
+- Settings persist: simpan ke localStorage, load saat game init
+
+---------------------------------------------------------------
+TAHAP 34 — HUD & UI Lengkap
+---------------------------------------------------------------
+Buat HUD & UI lengkap (overlay di canvas) ke game dari tahap 33.
+
+Ketentuan:
+- HUD elements (HTML/CSS overlay, tidak di Three.js):
+  1. Crosshair: tengah screen, style sesuai settings
+  2. HP Bar: bottom-left, bar hijau→merah, percentage number
+  3. Armor indicator: bottom-left (di atas HP), 4 slot icon (helmet/vest/pants/shoes) + defense number
+  4. Stamina Bar: bottom-left (di bawah HP), bar kuning
+  5. Weapon panel: bottom-right, current weapon name + icon + ammo (current/reserve)
+  6. Grenade count: bottom-right (di bawah weapon), grenade icon + count
+  7. Currency: bottom-right (di atas weapon), credits symbol + amount (hanya Buy Mode)
+  8. Kill feed: top-right, list kill events (scroll, fade after 5s)
+    Format: "[Player] killed [Bot] with [Weapon]"
+  9. Scoreboard: top-center, team score (Blue X — Red Y)
+  10. Match timer: top-center (di bawah score), waktu elapsed atau countdown
+  11. Loot box indicator: bottom-center, arah + jarak loot box terdekat (hanya Loot Mode)
+- HUD visibility: hidden saat menu/settings overlay active
+- HUD responsive: adjust position untuk different screen sizes
+- HUD style: dark semi-transparent background panels, white/cyan text, monospace font
+
+---------------------------------------------------------------
+TAHAP 35 — Model Low-Poly — Integrasi Asset Senjata
+---------------------------------------------------------------
+Integrasikan model 3D low-poly senjata dari situs asset gratis ke game dari tahap 34.
+
+Ketentuan:
+- Sumber asset: situs-situs yang menyediakan model 3D low-poly gratis
+  - Contoh: Sketchfab (filter low-poly, free), Poly Pizza, Free3D, OpenGameArt
+- Format: GLTF/GLB (Three.js GLTFLoader) atau OBJ (OBJLoader)
+- Asset yang dicari:
+  - Pisau/knife low-poly
+  - Pistol variants (revolver, glock, deagle) low-poly
+  - Shotgun low-poly
+  - Sniper rifle low-poly
+  - Assault rifle / SMG low-poly
+  - Grenade low-poly
+  - Armor pieces (helmet, vest) low-poly
+- Load model: GLTFLoader.load() untuk setiap model
+- Replace current BoxGeometry placeholder dengan model yang di-load
+- Model positioning: adjust offset (position, rotation, scale) agar terlihat correct di first-person view
+- Model performance: pastikan model tidak terlalu heavy (low-poly = <500 vertices per model)
+- Fallback: jika model tidak bisa load, tetap gunakan BoxGeometry placeholder
+- Model file disimpan lokal (download ke folder project) atau load via URL direct
+
+---------------------------------------------------------------
+TAHAP 36 — Integrasi Final & Polish
+---------------------------------------------------------------
+Integrasikan semua sistem, fix bug, polish, dan finalisasi output file game dari tahap 35.
+
+Ketentuan:
+- Pastikan semua sistem terhubung dan bekerja bersama:
+  - Main menu → Game Selection → Game Play → Death → Respawn → Match End → Back to Menu
+  - Weapon switching + shooting + damage + armor + HP → semuanya konsisten
+  - Bot AI + team system + score → semuanya terkoordinasi
+  - Buy mode & Loot mode → kedua mode berfungsi
+  - Keep inventory ON/OFF → berfungsi
+  - Corpse + loot + loot box → berfungsi
+  - Settings → mempengaruhi gameplay (sensitivity, crosshair, etc)
+- Bug fix priority:
+  - Collision detection (tidak ada clipping)
+  - Weapon switching (smooth, no glitch)
+  - Bot AI (no stuck, no infinite loop)
+  - Death/respawn cycle (no duplicate entities)
+  - Memory leaks (dispose geometry/material saat entity removed)
+- Performance optimization:
+  - FPS target: 60fps di device modern
+  - Reduce draw calls (merge geometries jika possible)
+  - LOD: simplified geometry untuk distant objects
+  - Shadow map quality vs performance
+- Output final files:
+  - index.html (single entry point, loads everything)
+  - style.css (all UI/HUD styling)
+  - script.js (all game logic, modular sections)
+  - item.json (all weapon/armor/loot data)
+  - models/ folder (all .glb/.gltf model files)
+- Pastikan game bisa di-run dengan membuka index.html di browser
+
+===============================================================
+  CATATAN PENTING UNTUK PENGGUNA
+===============================================================
+
+1. Setiap tahap BERTUMPU pada tahap sebelumnya. Jangan skip urutan.
+
+2. Sebelum memberikan sub-prompt tahap N kepada AI agentic,
+   pastikan hasil tahap N-1 sudah berfungsi dan di-save.
+
+3. Jika AI agentic gagal di tahap tertentu, berikan feedback
+   error dan minta fix spesifik, bukan restart dari awal.
+
+4. Beberapa tahap bisa di-run secara parallel oleh AI jika
+   independen (misalnya tahap 09 item.json bisa dikerjakan
+   bersamaan dengan tahap 02-05). Tapi untuk amannya,
+   ikuti urutan sequential.
+
+5. Tahap 35 (model asset) bisa dikerjakan lebih awal jika
+   Anda sudah punya model yang diinginkan. Download model
+   terlebih dahulu, lalu integrasi di tahap 35.
+
+6. Jumlah tahap = 36. Ini cukup banyak, tapi setiap tahap
+   kecil dan manageable. AI agentic akan lebih sukses
+   dengan task kecil daripada 1 task besar.
+
+===============================================================
+  END OF FILE
+===============================================================

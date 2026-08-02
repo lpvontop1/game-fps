@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment
+*.env
+.env
+
+# Build artifacts
+tool-results/
+test-results/
+
+# Temporary files
+media/frames-*/
+media/frame_*.png
+*.bak
+*.tmp
+
+# Work files
+worklog.md
+upload/
+download/
+scripts/

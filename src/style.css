@@ -1,0 +1,622 @@
+/* ============================================================
+   style.css — FPS Game Tahap 15 (Shotgun + Smoke Overlay + All Mechanics)
+   ============================================================ */
+
+/* Reset & fullscreen */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #000000;
+  font-family: 'Courier New', Courier, monospace;
+  color: #ffffff;
+}
+
+/* Canvas Three.js — fullscreen */
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Overlay UI container */
+#ui-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Debug info top-left */
+#debug-info {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #00ff00;
+  text-shadow: 0 0 4px rgba(0, 255, 0, 0.5);
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* ── Controls Info HUD (bottom-right) ─────────────────────── */
+#controls-info {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #aaaaaa;
+  text-shadow: 0 0 3px rgba(170, 170, 170, 0.3);
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#controls-info .ctrl-title {
+  font-size: 12px;
+  font-weight: bold;
+  color: #00ff00;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+#controls-info .ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctrl-key {
+  display: inline-block;
+  min-width: 24px;
+  text-align: center;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+/* ── Pointer Lock Prompt ──────────────────────────────────── */
+#lock-prompt {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+#lock-prompt.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lock-content {
+  text-align: center;
+  padding: 40px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 2px solid #00ff00;
+  border-radius: 12px;
+  max-width: 520px;
+}
+
+.lock-content h2 {
+  font-size: 24px;
+  color: #00ff00;
+  letter-spacing: 3px;
+  margin-bottom: 12px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.lock-content p {
+  font-size: 14px;
+  color: #888888;
+  margin-bottom: 20px;
+}
+
+.lock-keys {
+  font-size: 12px;
+  color: #aaaaaa;
+  line-height: 2;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Loading screen ───────────────────────────────────────── */
+#loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #111111;
+  z-index: 100;
+  transition: opacity 0.5s ease;
+}
+
+#loading-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#loading-screen h1 {
+  font-size: 28px;
+  color: #00ff00;
+  margin-bottom: 16px;
+  letter-spacing: 4px;
+}
+
+#loading-screen p {
+  font-size: 14px;
+  color: #888888;
+}
+
+/* ── Dynamic 4-Line Crosshair ─────────────────────────────── */
+#crosshair {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  pointer-events: none;
+  --spread: 0px;
+  --ch-color: rgba(255, 255, 255, 0.8);
+  width: 0;
+  height: 0;
+}
+
+.ch-dot {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  top: -1px;
+  left: -1px;
+  background: var(--ch-color);
+  border-radius: 50%;
+  transition: background 0.15s ease;
+}
+
+.ch-line {
+  position: absolute;
+  background: var(--ch-color);
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+
+.ch-top {
+  width: 2px;
+  height: 8px;
+  left: -1px;
+  bottom: calc(2px + var(--spread));
+}
+
+.ch-bottom {
+  width: 2px;
+  height: 8px;
+  left: -1px;
+  top: calc(2px + var(--spread));
+}
+
+.ch-left {
+  width: 8px;
+  height: 2px;
+  top: -1px;
+  right: calc(2px + var(--spread));
+}
+
+.ch-right {
+  width: 8px;
+  height: 2px;
+  top: -1px;
+  left: calc(2px + var(--spread));
+}
+
+/* ── Jump Indicator (bottom-center) ──────────────────────── */
+#jump-indicator {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: none;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+#jump-indicator.grounded {
+  color: #00ff00;
+  background: rgba(0, 80, 0, 0.5);
+  border: 1px solid rgba(0, 255, 0, 0.3);
+  text-shadow: 0 0 6px rgba(0, 255, 0, 0.4);
+}
+
+#jump-indicator.airborne {
+  color: #ff8800;
+  background: rgba(80, 40, 0, 0.5);
+  border: 1px solid rgba(255, 136, 0, 0.3);
+  text-shadow: 0 0 6px rgba(255, 136, 0, 0.4);
+  animation: airbornePulse 0.4s ease-in-out infinite;
+}
+
+@keyframes airbornePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── Crouch Indicator (bottom-center, above jump) ─────────── */
+#crouch-indicator {
+  position: fixed;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: none;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+#crouch-indicator.standing {
+  color: #00ff00;
+  background: rgba(0, 80, 0, 0.4);
+  border: 1px solid rgba(0, 255, 0, 0.2);
+  text-shadow: 0 0 6px rgba(0, 255, 0, 0.3);
+}
+
+#crouch-indicator.crouching {
+  color: #ffaa00;
+  background: rgba(80, 50, 0, 0.5);
+  border: 1px solid rgba(255, 170, 0, 0.3);
+  text-shadow: 0 0 6px rgba(255, 170, 0, 0.4);
+}
+
+#crouch-indicator.crawling {
+  color: #ff4444;
+  background: rgba(80, 0, 0, 0.5);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  text-shadow: 0 0 6px rgba(255, 68, 68, 0.4);
+  animation: crawlPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes crawlPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ── Stamina Bar (bottom-left) ────────────────────────────── */
+#stamina-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 180px;
+  height: 18px;
+  z-index: 20;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+#stamina-bar.exhausted {
+  border-color: #ff3300;
+  animation: exhaustedFlash 0.3s ease-in-out infinite;
+}
+
+@keyframes exhaustedFlash {
+  0%, 100% { border-color: #ff3300; }
+  50% { border-color: #ff8800; }
+}
+
+#stamina-fill {
+  width: 100%;
+  height: 100%;
+  background: #00ff00;
+  border-radius: 3px;
+  transition: width 0.1s linear, background 0.3s ease;
+}
+
+#stamina-text {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  height: 100%;
+  line-height: 18px;
+  font-size: 10px;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+#stamina-label {
+  position: absolute;
+  top: 0;
+  left: 6px;
+  height: 100%;
+  line-height: 18px;
+  font-size: 9px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.5);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
+/* ── Sensitivity Indicator (top-center, fades out) ────────── */
+#sensitivity-indicator {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  pointer-events: none;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  color: #88ccff;
+  background: rgba(0, 40, 80, 0.6);
+  border: 1px solid rgba(100, 180, 255, 0.3);
+  text-shadow: 0 0 6px rgba(100, 180, 255, 0.4);
+  opacity: 0;
+  display: none;
+  transition: opacity 0.4s ease;
+}
+
+/* ── Tahap 08: Map Info HUD (top-right) ───────────────────── */
+#map-info {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  pointer-events: none;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  color: #ffcc66;
+  background: rgba(60, 40, 0, 0.5);
+  border: 1px solid rgba(255, 200, 100, 0.3);
+  text-shadow: 0 0 4px rgba(255, 200, 100, 0.3);
+}
+
+/* ── Tahap 09: Weapon HUD (bottom-right, above controls) ─── */
+#weapon-hud {
+  position: fixed;
+  bottom: 160px;
+  right: 20px;
+  z-index: 20;
+  pointer-events: none;
+  text-align: right;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+#weapon-name {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
+}
+
+#weapon-ammo {
+  font-size: 18px;
+  font-weight: bold;
+  color: #ffcc44;
+  letter-spacing: 1px;
+  text-shadow: 0 0 6px rgba(255, 200, 60, 0.4);
+}
+
+#weapon-slot {
+  font-size: 11px;
+  color: #888888;
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+/* ── Tahap 10: Reload Indicator (center, below crosshair) ── */
+#reload-indicator {
+  position: fixed;
+  top: 55%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  pointer-events: none;
+  font-size: 14px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  color: #ff8844;
+  background: rgba(80, 30, 0, 0.6);
+  border: 1px solid rgba(255, 136, 68, 0.4);
+  padding: 4px 14px;
+  border-radius: 4px;
+  text-shadow: 0 0 6px rgba(255, 136, 68, 0.4);
+  display: none;
+}
+
+#reload-indicator.active {
+  display: block;
+  animation: reloadPulse 0.5s ease-in-out infinite;
+}
+
+@keyframes reloadPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Tahap 10: Hit Marker (center, on crosshair) ─────────── */
+#hit-marker {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 25;
+  pointer-events: none;
+  font-size: 18px;
+  font-weight: bold;
+  color: #ff4444;
+  text-shadow: 0 0 8px rgba(255, 68, 68, 0.6);
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+#hit-marker.active {
+  opacity: 1;
+  transition: opacity 0s;
+}
+
+/* ── Tahap 11: Grenade HUD (bottom-left, above stamina) ──── */
+#grenade-hud {
+  position: fixed;
+  bottom: 45px;
+  left: 20px;
+  z-index: 20;
+  pointer-events: none;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  color: #88ff88;
+  background: rgba(0, 40, 0, 0.5);
+  border: 1px solid rgba(100, 255, 100, 0.2);
+}
+
+/* ── Tahap 11 FIX: Smoke Overlay (full-screen fog when inside smoke) ── */
+#smoke-overlay {
+  position: fixed;
+  top: -50px;
+  left: -50px;
+  width: calc(100% + 100px);
+  height: calc(100% + 100px);
+  z-index: 8;
+  pointer-events: none;
+  display: none;
+  opacity: 0;
+  /* Volumetric smoke look: layered gradients + noise pattern */
+  background:
+    /* Layer 1: Animated noise-like pattern using multiple gradients */
+    radial-gradient(ellipse at 30% 40%, rgba(180, 180, 180, 0.6) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(160, 160, 160, 0.5) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 30%, rgba(170, 170, 170, 0.55) 0%, transparent 55%),
+    radial-gradient(ellipse at 20% 70%, rgba(150, 150, 150, 0.4) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 30%, rgba(165, 165, 165, 0.45) 0%, transparent 48%),
+    /* Layer 2: Base fog */
+    radial-gradient(
+      ellipse at center,
+      rgba(155, 155, 155, 1.0) 0%,
+      rgba(140, 140, 140, 0.98) 25%,
+      rgba(125, 125, 125, 0.95) 50%,
+      rgba(110, 110, 110, 0.92) 75%,
+      rgba(100, 100, 100, 0.88) 100%
+    );
+  background-size: 200% 200%, 180% 180%, 220% 220%, 160% 160%, 190% 190%, 100% 100%;
+  transition: opacity 0.2s ease;
+  animation: smokeSwirl 8s ease-in-out infinite;
+}
+
+@keyframes smokeSwirl {
+  0% { background-position: 0% 0%, 10% 10%, -5% 5%, 15% -5%, -10% 10%, 0 0; }
+  25% { background-position: 5% 10%, -5% 15%, 10% -5%, 0% 10%, 5% -10%, 0 0; }
+  50% { background-position: -5% 5%, 15% -5%, 0% 10%, 10% 0%, -5% 15%, 0 0; }
+  75% { background-position: 10% -5%, 0% 10%, 5% 5%, -5% 15%, 10% -5%, 0 0; }
+  100% { background-position: 0% 0%, 10% 10%, -5% 5%, 15% -5%, -10% 10%, 0 0; }
+}
+
+/* ── Tahap 16: Sniper Scope Overlay ── */
+#scope-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9;
+  pointer-events: none;
+  display: none;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+#scope-overlay .scope-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 70vh;
+  height: 70vh;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: transparent;
+  border: 3px solid rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.95);
+}
+
+#scope-overlay .scope-crosshair-h {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.8);
+  transform: translateY(-50%);
+}
+
+#scope-overlay .scope-crosshair-v {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  transform: translateX(-50%);
+}
+
+#scope-overlay .scope-mil-dot {
+  position: absolute;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
