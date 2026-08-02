@@ -85,7 +85,8 @@ fps-game/
 | 19 | HP & Damage Calculation — Death & Respawn | ✅ Selesai |
 | 20 | Bot AI — Pergerakan & Pathfinding (v2) | ✅ Selesai |
 | 21 | Bot AI — Menembak & Targeting (v3) | ✅ Selesai |
-| 22–36 | Bot AI Combat, Tim, Mode, UI, Polish | 🔜 Mendatang |
+| 22 | Bot AI — Perilacak Combat Lanjutan | ✅ Selesai |
+| 23–36 | Tim, Mode, UI, Polish | 🔜 Mendatang |
 
 ## Senjata Tersedia
 
@@ -107,6 +108,31 @@ fps-game/
 | Vest | Vest Light / Medium / Heavy | +15 / +30 / +60 | — |
 | Pants | Pants Light / Medium / Heavy | +8 / +20 / +40 | — |
 | Shoes | Shoes Light / Medium / Heavy | +5 / +12 / +25 | +0.5 SPD / — / -1 SPD |
+
+## Fitur Tahap 22 — Bot AI Combat Lanjutan
+
+- **Balanced bot combat**: Fire rate dikurangi (1.5/s dari 3.0/s), damage dikurangi (12 dari 20), akurasi dikurangi (spread 0.07 dari 0.04) — tidak lagi overpowered
+- **Performance optimization**: LOS check di-cache (setiap 0.3s, bukan setiap frame), bullet trail reuse, reusable Vector3 objects, no double LOS check
+- **Bot take cover**: Saat HP < 20, bot mencari posisi di belakang tembok untuk berlindung dari pemain — tidak nabrak tembok
+- **Bot crouch**: Saat HP < 30, bot crouch untuk reduce profile — animasi visual (scale.y = 0.6)
+- **Bot sprint**: Saat chase dan jarak > 20 unit ke player, bot sprint (speed 7.0) untuk mengejar
+- **Bot weapon switching**: Bot otomatis switch senjata berdasarkan jarak ke pemain:
+  - < 2.5 unit → Melee (pisau)
+  - < 10 unit → Shotgun
+  - 10-20 unit → Pistol
+  - 20-35 unit → Rifle
+  - > 35 unit → Sniper
+- **Bot weapon poses**: Setiap senjata punya pose berbeda:
+  - Pistol: arm forward, small pistol
+  - Shotgun: arm forward, two-handed, long barrel
+  - Sniper: arm forward steady, very long barrel
+  - Rifle: arm forward angled, medium barrel
+  - Melee: arm raised, blade forward
+  - Fist: arm forward, fist shape
+- **Bot melee attack**: Saat dekat (< 2.5 unit), bot menyerang melee (15 damage/serang)
+- **Full state machine**: idle → patrol → chase → shoot → crouch_shoot → take_cover → melee → retreat
+- **Melee hit fix (CRITICAL)**: `updateMatrixWorld(true)` ditambahkan di `checkBotHit()` — bot sekarang bisa dihit dengan pisau dan tangan kosong
+- **Lag fix**: Muzzle flash geometry disederhanakan, shared bullet trail material, cached LOS, max 6 bullet trails
 
 ## Fitur Tahap 21 — Bot AI Shooting & Targeting (v3)
 
@@ -176,6 +202,15 @@ fps-game/
 - **Quick-switch**: Tombol Q = cycle weapon variant (Pistol/Rifle/Shotgun/Sniper)
 - **Inventory tracking**: Dropped weapons retain ammo state, variant removal from ownedVariants
 - **Slot skip**: Switching slots otomatis skip ke variant yang tersedia
+
+## Bug Fixes (Tahap 22)
+
+- **Bot overpowered fix**: Fire rate 3.0/s → 1.5/s, damage 20 → 12, spread 0.04 → 0.07 — bot tidak lagi terlalu kuat
+- **Lag fix**: Cached LOS check (setiap 0.3s bukan setiap frame), reusable Vector3 objects, shared bullet trail material, simplified muzzle flash, max 6 bullet trails — tidak lag bahkan 3 bot keroyok
+- **Melee hit fix (CRITICAL)**: `updateMatrixWorld(true)` ditambahkan di `checkBotHit()` — bot sekarang bisa dihit dengan pisau dan tangan kosong (bug ini sudah berulang kali diperbaiki tapi selalu kembali)
+- **Bot take cover**: Bot mencari posisi di belakang tembok, tidak nabrak tembok — collision check saat bergerak ke cover
+- **Bot weapon switching**: Bot switch senjata berdasarkan jarak — melee dekat, shotgun medium-dekat, pistol medium, rifle medium-jauh, sniper jauh
+- **Bot sprint**: Bot bisa sprint (speed 7.0) saat mengejar pemain dari jarak jauh
 
 ## Bug Fixes (Tahap 21 v3)
 
