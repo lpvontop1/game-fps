@@ -1,6 +1,6 @@
 /* ============================================================
-   script.js — FPS Game Tahap 17: Weapon Switching & Inventory
-   + Tahap 01-16 + Bug fixes (scope overlay, smoke perf, SMG skin)
+   script.js — FPS Game Tahap 18: Armor System
+   + Tahap 01-17 + Bug fixes (smoke v5, weapon drop cooldown, scope)
    ============================================================ */
 
 // ── Konfigurasi ──────────────────────────────────────────────
@@ -85,8 +85,9 @@ const CONFIG = {
   grenadeMaxBounces: 3,
   grenadeTimer: 3.0,
   smokeGrenadeDuration: 12,
-  smokeParticleCount: 20,    // Optimized: 20 sprites for dense smoke, batch rendered
-  smokeRadius: 6,            // Slightly larger for better coverage
+  smokeParticleCount: 40,    // v5: 40 sprites — dense enough to block vision from outside
+  smokeRadius: 7,            // v5: Larger radius for realistic smoke coverage
+  smokePickupCooldown: 2.0,  // Seconds before a dropped weapon can be picked up again
 
   // ── Tahap 12: Fist ──────────────────────────────────────
   fistRange: 2.0,            // BUG FIX: increased from 1.5 for easier aiming
@@ -270,6 +271,16 @@ let rifleRecoilOffset = 0;
 let currentFOV = 75;           // Current camera FOV (lerps between 75 and 20)
 let targetFOV = 75;            // Target FOV for smooth transition
 
+// ── Tahap 18: Armor System ──────────────────────────────────
+const armorInventory = {
+  helmet: null,   // Currently equipped helmet item
+  vest: null,     // Currently equipped vest item
+  pants: null,    // Currently equipped pants item
+  shoes: null,    // Currently equipped shoes item
+};
+let isInventoryOpen = false;    // Whether the armor inventory screen is open
+let armorSpeedBonus = 0;        // Speed bonus from shoes (can be negative for penalty)
+
 // ── DOM Elements ────────────────────────────────────────────
 const debugInfo = document.getElementById('debug-info');
 const loadingScreen = document.getElementById('loading-screen');
@@ -349,6 +360,10 @@ function setupInputHandlers() {
       // Tahap 17: B key to drop current weapon
       else if (key === 'b') {
         dropCurrentWeapon();
+      }
+      // Tahap 18: I key to toggle armor inventory
+      else if (key === 'i') {
+        toggleArmorInventory();
       }
     }
   }, true); // capture phase
@@ -442,6 +457,8 @@ function setupInputHandlers() {
       // Tahap 16: Unscope when pointer lock is lost
       isSniperScoping = false;
       targetFOV = CONFIG.cameraFOV;
+      // Tahap 18: Don't show lock prompt if inventory is open
+      if (!isInventoryOpen && lockPrompt) lockPrompt.style.display = 'flex';
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
@@ -767,6 +784,7 @@ async function loadItemData() {
     // Update HUD
     updateWeaponHud();
     updateGrenadeHud();
+    updateArmorHud();  // Tahap 18: Initialize armor HUD
 
     console.log('item.json loaded successfully:', countWeapons() + ' weapons,',
                 countArmor() + ' armor items');
@@ -777,6 +795,7 @@ async function loadItemData() {
     initializeWeaponAmmo();
     updateWeaponHud();
     updateGrenadeHud();
+    updateArmorHud();  // Tahap 18: Initialize armor HUD
     console.log('item.json fallback loaded:', countWeapons() + ' weapons,',
                 countArmor() + ' armor items');
   }
@@ -1911,41 +1930,60 @@ function showDamageFlash(intensity) {
   }, 100);
 }
 
-// ── Smoke Cloud (v4: Dense smoke, sprite-based, no lag) ─────────
+// ── Smoke Cloud (v5: Dense smoke from outside, hazy from inside, no lag) ─────────
 function createSmokeCloud(position, grenadeData) {
-  // v4: Uses THREE.Sprite instead of Mesh — MUCH faster rendering
-  // Sprites are always camera-facing, no geometry updates needed
-  // 20 sprites with high opacity = dense smoke from outside
-  // CSS overlay handles "inside smoke" visibility blocking (no per-frame 3D work)
-  const radius = CONFIG.smokeRadius || 6;
+  // v5: Complete rewrite of smoke behavior
+  // In real FPS games (CS:GO, Valorant, etc.), smoke grenades work like this:
+  //   - FROM OUTSIDE: You CANNOT see through the smoke — it's a solid wall of white/grey
+  //   - FROM INSIDE: You can see a little bit (hazy/foggy) but not clearly
+  //   - The smoke cloud is a defined volume — it has edges
+  //
+  // Implementation:
+  //   - 40 sprites with HIGH opacity (0.65-0.85) = blocks vision from outside
+  //   - CSS overlay is LIGHTER (0.25-0.45) when inside = you can still see a bit
+  //   - Sprites are layered: inner = more opaque, outer = less opaque
+  //   - Shared texture for all sprites (one draw call per sprite type)
+  const radius = CONFIG.smokeRadius || 7;
   const duration = grenadeData.duration || CONFIG.smokeGrenadeDuration;
-  const particleCount = CONFIG.smokeParticleCount || 20;
+  const particleCount = CONFIG.smokeParticleCount || 40;
 
   // Create a single shared canvas texture for all smoke sprites
   const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
+  canvas.width = 128;
+  canvas.height = 128;
   const ctx = canvas.getContext('2d');
-  // Draw a soft radial gradient (smoke puff shape)
-  const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(200,200,200,1.0)');
-  grad.addColorStop(0.3, 'rgba(180,180,180,0.8)');
-  grad.addColorStop(0.6, 'rgba(160,160,160,0.4)');
+  // Draw a soft-but-dense radial gradient (smoke puff shape)
+  // Key: the center is very opaque (hard to see through), edges fade
+  const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(220,220,220,1.0)');
+  grad.addColorStop(0.2, 'rgba(200,200,200,0.95)');
+  grad.addColorStop(0.4, 'rgba(185,185,185,0.85)');
+  grad.addColorStop(0.6, 'rgba(170,170,170,0.65)');
+  grad.addColorStop(0.8, 'rgba(155,155,155,0.35)');
   grad.addColorStop(1.0, 'rgba(140,140,140,0.0)');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillRect(0, 0, 128, 128);
   const smokeTexture = new THREE.CanvasTexture(canvas);
 
   const smokeParticles = [];
 
+  // Layer 1: Core smoke (inner 50% of radius) — very opaque, blocks vision
+  const coreCount = Math.floor(particleCount * 0.6);
+  // Layer 2: Edge smoke (outer 50% of radius) — less opaque, creates soft edges
+  const edgeCount = particleCount - coreCount;
+
   for (let i = 0; i < particleCount; i++) {
+    const isCore = i < coreCount;
     const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * radius * 0.8;
-    const height = Math.random() * 3.0 + 0.2;
+    const maxDist = isCore ? radius * 0.5 : radius * 0.85;
+    const dist = Math.random() * maxDist;
+    const height = isCore
+      ? Math.random() * 3.5 + 0.3
+      : Math.random() * 2.5 + 0.2;
 
     const spriteMat = new THREE.SpriteMaterial({
       map: smokeTexture,
-      color: 0xcccccc,
+      color: isCore ? 0xcccccc : 0xbbbbbb,
       transparent: true,
       opacity: 0,
       depthWrite: false,
@@ -1953,8 +1991,10 @@ function createSmokeCloud(position, grenadeData) {
     });
 
     const sprite = new THREE.Sprite(spriteMat);
-    // Sprite scale = size in world units
-    const size = 3.0 + Math.random() * 3.0;
+    // Core sprites are larger, edge sprites are smaller
+    const size = isCore
+      ? 4.0 + Math.random() * 3.0
+      : 3.0 + Math.random() * 2.5;
     sprite.scale.set(size, size, 1);
     sprite.position.set(
       position.x + Math.cos(angle) * dist,
@@ -1963,13 +2003,18 @@ function createSmokeCloud(position, grenadeData) {
     );
 
     scene.add(sprite);
-    const baseOpacity = 0.35 + Math.random() * 0.2;
+    // Core smoke: HIGH opacity (0.7-0.85) = blocks vision from outside
+    // Edge smoke: lower opacity (0.4-0.55) = soft edges
+    const baseOpacity = isCore
+      ? 0.7 + Math.random() * 0.15
+      : 0.4 + Math.random() * 0.15;
     smokeParticles.push({
       mesh: sprite,
       targetOpacity: baseOpacity,
       fadeIn: true,
-      fadeSpeed: 0.4 + Math.random() * 0.15,
+      fadeSpeed: 0.5 + Math.random() * 0.2,
       distFromCenter: dist / radius,
+      isCore: isCore,
     });
   }
 
@@ -4850,7 +4895,8 @@ function dropCurrentWeapon() {
   const weapon = getWeaponById(slotId);
   if (!weapon) return;
 
-  // Create a pickup mesh at the player's position
+  // Create a pickup mesh at the player's position — drop in front of player
+  const dropDir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
   const pickupGeo = new THREE.BoxGeometry(0.3, 0.1, 0.15);
   const pickupMat = new THREE.MeshPhongMaterial({
     color: weapon.type === 'pistol' ? 0x888888 :
@@ -4860,21 +4906,24 @@ function dropCurrentWeapon() {
     shininess: 30
   });
   const pickupMesh = new THREE.Mesh(pickupGeo, pickupMat);
+  // Drop 1.5 units in front of player (not at player's feet)
   pickupMesh.position.set(
-    camera.position.x + Math.sin(yaw) * 1.0,
+    camera.position.x + dropDir.x * 1.5,
     0.15,
-    camera.position.z + Math.cos(yaw) * 1.0
+    camera.position.z + dropDir.z * 1.5
   );
   pickupMesh.name = 'weapon_pickup_' + slotId;
   scene.add(pickupMesh);
 
-  // Store the dropped weapon info
+  // Store the dropped weapon info with dropTime for pickup cooldown
+  const now = performance.now() / 1000;
   droppedWeapons.push({
     mesh: pickupMesh,
     weaponId: slotId,
     slot: weaponInventory.currentSlot,
     ammo: weaponInventory.ammo[slotId] || 0,
     reserve: weaponInventory.reserveAmmo[slotId] || 0,
+    dropTime: now,  // v5: Track when the weapon was dropped
   });
 
   // Remove from inventory
@@ -4890,9 +4939,16 @@ function dropCurrentWeapon() {
 function checkWeaponPickups() {
   const playerPos = camera.position;
   const pickupRadius = 1.5;
+  const now = performance.now() / 1000;
+  const cooldown = CONFIG.smokePickupCooldown || 2.0;
 
   for (let i = droppedWeapons.length - 1; i >= 0; i--) {
     const dw = droppedWeapons[i];
+
+    // v5: Pickup cooldown — can't pick up a weapon within 2 seconds of dropping it
+    // This prevents the auto-pickup bug where standing on a dropped weapon re-equips it
+    if (dw.dropTime && (now - dw.dropTime) < cooldown) continue;
+
     const dx = playerPos.x - dw.mesh.position.x;
     const dz = playerPos.z - dw.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
@@ -4942,7 +4998,154 @@ function showPickupNotification(text) {
 function updateDroppedWeapons(deltaTime) {
   for (const dw of droppedWeapons) {
     dw.mesh.rotation.y += deltaTime * 2.0;
+    // Ensure weapon stays on ground (y=0.15), never falls through
     dw.mesh.position.y = 0.15 + Math.sin(performance.now() / 1000 * 2 + dw.mesh.position.x) * 0.05;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TAHAP 18: ARMOR SYSTEM — Equip, Unequip, Defense, Speed
+// ══════════════════════════════════════════════════════════════
+
+// ── Armor Helper Functions ──────────────────────────────────
+function getTotalDefense() {
+  let total = 0;
+  for (const slot of ['helmet', 'vest', 'pants', 'shoes']) {
+    if (armorInventory[slot]) {
+      total += armorInventory[slot].defense || 0;
+    }
+  }
+  return total;
+}
+
+function getArmorSpeedModifier() {
+  let modifier = 0;
+  if (armorInventory.shoes) {
+    if (armorInventory.shoes.speedBonus) modifier += armorInventory.shoes.speedBonus;
+    if (armorInventory.shoes.speedPenalty) modifier += armorInventory.shoes.speedPenalty;
+  }
+  return modifier;
+}
+
+function equipArmor(armorItem) {
+  if (!armorItem || !armorItem.slot) return;
+  const slot = armorItem.slot; // 'helmet', 'vest', 'pants', 'shoes'
+
+  // If already wearing something in this slot, unequip it first
+  if (armorInventory[slot]) {
+    // Show notification about replacing
+    const oldName = armorInventory[slot].name || 'Unknown';
+    showPickupNotification('Replaced ' + oldName + ' with ' + armorItem.name);
+  } else {
+    showPickupNotification('Equipped: ' + armorItem.name + ' (+' + armorItem.defense + ' DEF)');
+  }
+
+  armorInventory[slot] = armorItem;
+  armorSpeedBonus = getArmorSpeedModifier();
+  updateArmorHud();
+  updateArmorInventoryScreen();
+}
+
+function unequipArmor(slot) {
+  if (!armorInventory[slot]) return;
+
+  const item = armorInventory[slot];
+  armorInventory[slot] = null;
+  armorSpeedBonus = getArmorSpeedModifier();
+  showPickupNotification('Unequipped: ' + item.name);
+  updateArmorHud();
+  updateArmorInventoryScreen();
+}
+
+function updateArmorHud() {
+  const slots = ['helmet', 'vest', 'pants', 'shoes'];
+  for (const slot of slots) {
+    const valueEl = document.getElementById('armor-' + slot + '-value');
+    if (!valueEl) continue;
+
+    if (armorInventory[slot]) {
+      valueEl.textContent = armorInventory[slot].name + ' (+' + armorInventory[slot].defense + ')';
+      valueEl.classList.add('equipped');
+    } else {
+      valueEl.textContent = 'None';
+      valueEl.classList.remove('equipped');
+    }
+  }
+
+  const totalDefEl = document.getElementById('armor-total-defense');
+  if (totalDefEl) {
+    totalDefEl.textContent = getTotalDefense().toString();
+  }
+}
+
+function toggleArmorInventory() {
+  isInventoryOpen = !isInventoryOpen;
+  const invEl = document.getElementById('armor-inventory');
+
+  if (isInventoryOpen) {
+    // Exit pointer lock when opening inventory
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+    invEl.style.display = 'flex';
+    updateArmorInventoryScreen();
+  } else {
+    invEl.style.display = 'none';
+    // Re-lock pointer when closing inventory
+    if (renderer && renderer.domElement) {
+      renderer.domElement.requestPointerLock();
+    }
+  }
+}
+
+function updateArmorInventoryScreen() {
+  if (!itemData || !itemData.armor) return;
+
+  const slotTypes = ['helmet', 'vest', 'pants', 'shoes'];
+
+  for (const slotType of slotTypes) {
+    const container = document.getElementById('inv-' + slotType);
+    if (!container) continue;
+
+    container.innerHTML = '';
+
+    const items = itemData.armor[slotType] || [];
+    for (const item of items) {
+      const div = document.createElement('div');
+      div.className = 'inv-item';
+
+      // Check if this item is currently equipped
+      const isEquipped = armorInventory[slotType] && armorInventory[slotType].id === item.id;
+      if (isEquipped) div.classList.add('equipped');
+
+      let label = item.name;
+      let extra = ' (+' + item.defense + ' DEF)';
+      if (item.speedBonus) extra += ' (+' + item.speedBonus + ' SPD)';
+      if (item.speedPenalty) extra += ' (' + item.speedPenalty + ' SPD)';
+
+      div.innerHTML = label + '<span class="item-defense">' + extra + '</span>';
+
+      // Click handler: equip or unequip
+      div.addEventListener('click', () => {
+        if (isEquipped) {
+          unequipArmor(slotType);
+        } else {
+          equipArmor(item);
+        }
+      });
+
+      container.appendChild(div);
+    }
+  }
+
+  // Update footer
+  const totalDefEl = document.getElementById('inv-total-defense');
+  if (totalDefEl) totalDefEl.textContent = getTotalDefense();
+
+  const speedBonusEl = document.getElementById('inv-speed-bonus');
+  if (speedBonusEl) {
+    const speed = getArmorSpeedModifier();
+    speedBonusEl.textContent = (speed >= 0 ? '+' : '') + speed.toFixed(1);
   }
 }
 
@@ -5392,6 +5595,9 @@ function updateMovement(deltaTime) {
   else if (isSprinting) currentSpeed = CONFIG.sprintSpeed;
   else currentSpeed = CONFIG.walkSpeed;
 
+  // Tahap 18: Apply armor speed bonus/penalty from shoes
+  currentSpeed += armorSpeedBonus;
+
   const cameraDirection = new THREE.Vector3();
   camera.getWorldDirection(cameraDirection);
   const forwardXZ = new THREE.Vector3(cameraDirection.x, 0, cameraDirection.z);
@@ -5503,10 +5709,12 @@ function updateJump(deltaTime) {
 }
 
 // ── Render Loop ─────────────────────────────────────────────
-// ── Tahap 11 FIX: Screen-space smoke overlay (v2 — volumetric look) ────────
-// When player is inside smoke, render a full-screen fog overlay with noise
-// This makes it impossible to see outside clearly when inside the smoke
-// Uses animated CSS background for volumetric smoke appearance
+// ── Tahap 11 FIX: Screen-space smoke overlay (v5 — correct behavior) ────────
+// In real FPS games (CS:GO, Valorant):
+//   - FROM OUTSIDE: The 3D sprites block your vision (they're opaque enough)
+//   - FROM INSIDE: A light fog overlay makes it hard to see but not impossible
+//   - The key insight: the CSS overlay should be LIGHTER (0.3-0.5) not 0.95
+//     because the 3D sprites already handle vision blocking from outside
 let smokeOverlayTime = 0;
 function updateSmokeOverlay() {
   if (!smokeOverlayEl) return;
@@ -5525,9 +5733,11 @@ function updateSmokeOverlay() {
       const distRatio = dist2D / cloud.radius;
       const heightRatio = heightDiff / 3.0;
 
-      // Inner smoke is MUCH thicker — player inside should see almost nothing
-      // At center: 0.85-0.95 opacity, at edge: 0.4-0.6 opacity
-      const opacity = (1 - distRatio * 0.4) * (1 - heightRatio * 0.2);
+      // v5: Inside smoke is hazy but NOT pitch black
+      // At center: 0.40-0.50 opacity (hazy, can barely see shapes)
+      // At edge: 0.15-0.25 opacity (slight fog)
+      // This matches real FPS games where you can see vague shapes inside smoke
+      const opacity = (0.5 - distRatio * 0.25) * (1 - heightRatio * 0.15);
 
       const elapsed = performance.now() / 1000 - cloud.startTime;
       const remaining = cloud.duration - elapsed;
@@ -5535,7 +5745,10 @@ function updateSmokeOverlay() {
         ? remaining / (cloud.duration * 0.3)
         : 1.0;
 
-      const finalOpacity = opacity * fadeFactor * 0.95;
+      // Fade-in during first 2 seconds (smoke filling the volume)
+      const fadeInFactor = elapsed < 2.0 ? elapsed / 2.0 : 1.0;
+
+      const finalOpacity = opacity * fadeFactor * fadeInFactor;
       if (finalOpacity > maxOpacity) maxOpacity = finalOpacity;
       if (dist2D < closestDist) closestDist = dist2D;
     }
@@ -5648,8 +5861,11 @@ function updateDebugInfo(deltaTime) {
   const sniperInfo = (weaponLabel === 'bolt_sniper' || weaponLabel === 'semi_sniper')
     ? ' | Sniper: ' + weaponLabel.toUpperCase() + (isSniperScoping ? ' [SCOPING]' : '') + ' (Q=switch, RMB=scope)' : '';
 
+  // Tahap 18: Armor info
+  const armorInfo = ' | DEF: ' + getTotalDefense() + ' SPD: ' + (armorSpeedBonus >= 0 ? '+' : '') + armorSpeedBonus.toFixed(1);
+
   debugInfo.innerHTML =
-    'TAHAP 16 — Sniper Rifle Variants<br>' +
+    'TAHAP 18 — Armor System' + armorInfo + '<br>' +
     'FPS: ' + fps + ' | Speed: ' + speed + ' u/s [' + speedLabel + ']<br>' +
     'Pos: (' + camera.position.x.toFixed(1) + ', ' + camera.position.y.toFixed(1) + ', ' + camera.position.z.toFixed(1) + ')<br>' +
     'Yaw: ' + yawDeg + ' | Pitch: ' + pitchDeg + '<br>' +

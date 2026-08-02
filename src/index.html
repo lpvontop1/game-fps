@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FPS Game 3D — Tahap 16</title>
+  <title>FPS Game 3D — Tahap 18</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -32,6 +32,8 @@
         <span class="ctrl-key">R</span> Reload &nbsp;&nbsp;
         <span class="ctrl-key">G</span> Granat (hold=aim) &nbsp;&nbsp;
         <span class="ctrl-key">H</span> Smoke (hold=aim) &nbsp;&nbsp;
+        <span class="ctrl-key">B</span> Drop &nbsp;&nbsp;
+        <span class="ctrl-key">I</span> Armor &nbsp;&nbsp;
         <span class="ctrl-key">ESC</span> Lepas
       </div>
     </div>
@@ -75,6 +77,8 @@
     <div class="ctrl-row"><span class="ctrl-key">4</span> Rifle</div>
     <div class="ctrl-row"><span class="ctrl-key">5</span> Shotgun (Q=switch)</div>
     <div class="ctrl-row"><span class="ctrl-key">6</span> Sniper (Q=switch, RMB=scope)</div>
+    <div class="ctrl-row"><span class="ctrl-key">B</span> Drop senjata</div>
+    <div class="ctrl-row"><span class="ctrl-key">I</span> Armor inventory (equip/unequip)</div>
     <div class="ctrl-row"><span class="ctrl-key">+</span><span class="ctrl-key">-</span> Sensitivitas</div>
     <div class="ctrl-row"><span class="ctrl-key">ESC</span> Lepas</div>
   </div>
@@ -126,6 +130,59 @@
 
   <!-- Tahap 17: Pickup Notification -->
   <div id="pickup-notification" style="display:none; position:fixed; top:35%; left:50%; transform:translateX(-50%); z-index:15; color:#00ff88; font-size:18px; font-family:'Courier New',monospace; text-shadow:0 0 8px rgba(0,255,136,0.5); transition:opacity 0.5s; pointer-events:none;"></div>
+
+  <!-- Tahap 18: Armor HUD (top-left, below debug) -->
+  <div id="armor-hud">
+    <div class="armor-title">ARMOR</div>
+    <div class="armor-row" id="armor-helmet-slot">
+      <span class="armor-icon">🪖</span>
+      <span class="armor-label">Helmet:</span>
+      <span class="armor-value" id="armor-helmet-value">None</span>
+    </div>
+    <div class="armor-row" id="armor-vest-slot">
+      <span class="armor-icon">🦺</span>
+      <span class="armor-label">Vest:</span>
+      <span class="armor-value" id="armor-vest-value">None</span>
+    </div>
+    <div class="armor-row" id="armor-pants-slot">
+      <span class="armor-icon">👖</span>
+      <span class="armor-label">Pants:</span>
+      <span class="armor-value" id="armor-pants-value">None</span>
+    </div>
+    <div class="armor-row" id="armor-shoes-slot">
+      <span class="armor-icon">👟</span>
+      <span class="armor-label">Shoes:</span>
+      <span class="armor-value" id="armor-shoes-value">None</span>
+    </div>
+    <div class="armor-total">DEF: <span id="armor-total-defense">0</span></div>
+  </div>
+
+  <!-- Tahap 18: Armor Inventory Screen (I key) -->
+  <div id="armor-inventory" style="display:none;">
+    <div class="inv-container">
+      <div class="inv-header">ARMOR INVENTORY — Tekan I untuk tutup</div>
+      <div class="inv-section">
+        <h3>HELMET</h3>
+        <div class="inv-items" id="inv-helmet"></div>
+      </div>
+      <div class="inv-section">
+        <h3>VEST</h3>
+        <div class="inv-items" id="inv-vest"></div>
+      </div>
+      <div class="inv-section">
+        <h3>PANTS</h3>
+        <div class="inv-items" id="inv-pants"></div>
+      </div>
+      <div class="inv-section">
+        <h3>SHOES</h3>
+        <div class="inv-items" id="inv-shoes"></div>
+      </div>
+      <div class="inv-footer">
+        <span>Total Defense: <span id="inv-total-defense">0</span></span>
+        <span>Speed Bonus: <span id="inv-speed-bonus">0</span></span>
+      </div>
+    </div>
+  </div>
 
   <!-- UI Overlay -->
   <div id="ui-overlay"></div>

@@ -45,13 +45,14 @@ fps-game/
 | 1 | Tangan Kosong (Fist) |
 | 2 | Pisau (Knife) |
 | 3 | Pistol (Glock/Revolver/Deagle) |
-| 4 | Shotgun (Pump/Auto) |
-| 5 | Sniper Rifle (Bolt/Semi-Auto) |
-| 6 | Rifle (Assault Rifle/SMG) |
+| 4 | Rifle (Assault Rifle/SMG) |
+| 5 | Shotgun (Pump/Auto) |
+| 6 | Sniper Rifle (Bolt/Semi-Auto) |
 | G | Granat Frag (hold=aim) |
 | H | Granat Smoke (hold=aim) |
 | Q | Cycle weapon variant (Pistol/Rifle/Shotgun/Sniper) |
 | B | Drop weapon |
+| I | Armor inventory (equip/unequip) |
 | R | Reload |
 | + / - | Sensitivitas mouse |
 | ESC | Lepas pointer lock |
@@ -77,7 +78,8 @@ fps-game/
 | 15 | Sistem Senjata — Shotgun | ✅ Selesai |
 | 16 | Sistem Senjata — Sniper Rifle | ✅ Selesai |
 | 17 | Sistem Senjata — Switching & Inventory Pemain | ✅ Selesai |
-| 18–36 | Armor, HP, Bot AI, Tim, Mode, UI, Polish | 🔜 Mendatang |
+| 18 | Sistem Armor — Helmet, Vest, Celana, Sepatu | ✅ Selesai |
+| 19–36 | HP, Bot AI, Tim, Mode, UI, Polish | 🔜 Mendatang |
 
 ## Senjata Tersedia
 
@@ -86,20 +88,37 @@ fps-game/
 | 1 | Melee | Tangan Kosong | Damage 5, pukulan tangan |
 | 2 | Melee | Pisau | Damage 25, slash animation |
 | 3 | Pistol | Revolver / Glock-17 / Desert Eagle | Magazine 6/17/7, rate bervariasi |
-| 4 | Shotgun | Pump Shotgun / Auto Shotgun | 8/6 pellets, spread tinggi |
-| 5 | Sniper | Bolt Sniper / Semi-Auto Sniper | Damage 90/70, scope zoom |
-| 6 | Rifle | Assault Rifle / SMG | Magazine 30/35, rate tinggi |
+| 4 | Rifle | Assault Rifle / SMG | Magazine 30/35, rate tinggi |
+| 5 | Shotgun | Pump Shotgun / Auto Shotgun | 8/6 pellets, spread tinggi |
+| 6 | Sniper | Bolt Sniper / Semi-Auto Sniper | Damage 90/70, scope zoom |
 | G | Grenade | Frag Grenade / Smoke Grenade | Damage 80 / Asap 12 detik |
+
+## Armor Tersedia
+
+| Slot | Armor | Defense | Bonus |
+|------|-------|---------|-------|
+| Helmet | Helmet Light / Medium / Heavy | +10 / +25 / +50 | — |
+| Vest | Vest Light / Medium / Heavy | +15 / +30 / +60 | — |
+| Pants | Pants Light / Medium / Heavy | +8 / +20 / +40 | — |
+| Shoes | Shoes Light / Medium / Heavy | +5 / +12 / +25 | +0.5 SPD / — / -1 SPD |
+
+## Fitur Tahap 18 — Sistem Armor
+
+- **4 armor slots**: Helmet, Vest, Pants, Shoes — masing-masing bisa di-equip/unequip
+- **Defense stat**: Setiap armor punya defense value sesuai item.json, total defense = sum of all
+- **Speed bonus/penalty**: Shoes Light (+0.5 speed), Shoes Heavy (-1 speed) mempengaruhi movement
+- **Armor HUD**: Top-left panel menampilkan armor yang di-equip dan total defense
+- **Inventory screen**: Tombol I = buka armor inventory, klik item untuk equip/unequip
+- **Equip/unequip**: Klik item di inventory untuk equip, klik equipped item untuk unequip
+- **Replace armor**: Equip item baru di slot yang sama otomatis mengganti yang lama
 
 ## Fitur Tahap 17 — Weapon Switching & Inventory
 
 - **Weapon switch animation**: Brief lower + raise weapon animation (0.15s per phase)
 - **Drop weapon**: Tombol B = drop current weapon ke ground sebagai pickup item
-- **Pickup weapon**: Walk over dropped weapon untuk auto-pickup
+- **Pickup weapon**: Walk over dropped weapon untuk auto-pickup (2 detik cooldown setelah drop)
 - **Quick-switch**: Tombol Q = cycle weapon variant (Pistol/Rifle/Shotgun/Sniper)
-- **SMG variant**: Slot 4 (Rifle) sekarang bisa switch antara Assault Rifle (M4/AR-15 style) dan SMG (MP5-style) via Q key
-- **SMG model**: Compact MP5-style dengan HK drum sights, curved magazine, vertical foregrip, retractable stock
-- **Assault Rifle model**: M4/AR-15 style dengan carry handle, collapsible stock, rail sections
+- **SMG variant**: Slot 4 (Rifle) bisa switch antara Assault Rifle dan SMG via Q key
 - **Inventory tracking**: Dropped weapons retain ammo state
 - **Pickup notification**: On-screen text saat mengambil weapon pickup
 
@@ -107,11 +126,17 @@ fps-game/
 
 - **Scope/Zoom**: Klik kanan hold = zoom (FOV 75 → 20), lerp transition smooth
 - **Scope overlay**: CSS circle border + fine crosshair saat zoom aktif
-- **2 varian sniper**: Bolt Sniper (damage 90, rate 0.5/s, spread 0.005) dan Semi-Auto Sniper (damage 70, rate 1.0/s, spread 0.01)
+- **2 varian sniper**: Bolt Sniper (damage 90, rate 0.5/s) dan Semi-Auto Sniper (damage 70, rate 1.0/s)
 - **FOV transition**: Lerp dari 75 → 20 saat klik kanan, kembali saat release
-- **Weapon slot**: Tombol 5 = sniper
 
-## Fitur Lengkap (Tahap 01–17)
+## Bug Fixes (Tahap 18)
+
+- **Smoke grenade v5**: Asap sekarang benar — dari luar TIDAK bisa menembus asap (3D sprites opaque), dari dalam kabur tapi tidak gelap total (CSS overlay lebih ringan)
+- **Weapon drop cooldown**: Senjata yang di-drop tidak auto-pickup selama 2 detik (mencegah bug auto-reequip)
+- **Weapon drop position**: Senjata di-drop 1.5 unit di depan player, bukan di kaki player
+- **Weapon ground stability**: Dropped weapons tetap di y=0.15, tidak no-clip ke bawah map
+
+## Fitur Lengkap (Tahap 01–18)
 
 ### Sistem Gerakan
 - **WASD movement**: Framerate-independent velocity dengan lerp
@@ -145,24 +170,29 @@ fps-game/
 - **Reload**: Tombol R untuk manual, indicator HUD saat reloading
 - **Recoil**: Visual recoil yang mempengaruhi crosshair
 - **Hit marker**: Indikator visual di crosshair saat mengenai objek
-- **Quick-switch**: Tombol Q untuk kembali ke senjata sebelumnya
 
 ### Sistem Melee
 - **Fist**: Tangan kosong dengan punch animation, visual anatomi tangan realistis
-- **Knife**: Pisau tactical dengan slash animation (blade edge leading)
+- **Knife**: Pisau tactical dengan slash animation
 
 ### Sistem Grenade
 - **Frag Grenade**: Projectile physics, arc, detonasi, radius damage
-- **Smoke Grenade**: Particle system, asap tebal, optimasi performa
+- **Smoke Grenade**: 40 sprites berlapis (core + edge), opaque dari luar, hazy dari dalam
 - **Aim/charge mechanic**: Hold untuk mengatur jarak lempar
+
+### Sistem Armor
+- **4 slots**: Helmet, Vest, Pants, Shoes
+- **Equip/unequip**: Inventory screen via tombol I
+- **Defense calculation**: Total defense dari semua armor yang di-equip
+- **Speed modifier**: Shoes mempengaruhi movement speed
 
 ### Sistem HUD
 - **Crosshair**: Dynamic 4-line dengan spread berdasarkan stance/speed
 - **Weapon panel**: Slot senjata, current weapon highlighted
 - **Ammo counter**: Current magazine / reserve
 - **Stamina bar**: Sprint stamina indicator
-- **Health bar**: HP indicator
 - **Grenade indicator**: Tampilkan tipe granat aktif
+- **Armor HUD**: Top-left panel menampilkan armor yang di-equip dan total defense
 
 ## Teknologi
 
